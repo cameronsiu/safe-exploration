@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "safe-exploration"
+version = "0.1.0"
+description = "CMPT 729 Project"
+authors = [
+  { name="Cameron Siu", email="csa194@sfu.ca" },
+  { name="Tristan Ellison", email="tea21@sfu.ca" },
+  { name="Declan Easton", email="dre3@sfu.ca" },
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+
+dependencies = [
+  "pyfunctional",
+  "numpy",
+  "torch",
+  "tensorboardx",
+  "tensorboard",
+  "gym",
+  "pyyaml"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "black",
+  "isort",
+  "mypy",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
