@@ -260,3 +260,53 @@ class DDPG:
         print("==========================================================")
         print(f"Finished DDPG training. Time spent: {(time.time() - start_time) // 1} secs")
         print("==========================================================")
+
+    # TODO: check how RL assignments test
+    def test(self):
+        
+        start_time = time.time()
+
+        print("==========================================================")
+        print("Initializing DDPG testing...")
+        print("----------------------------------------------------------")
+        print(f"Start time: {datetime.fromtimestamp(start_time)}")
+        print("==========================================================")
+
+        observation = self._env.reset()
+        c = self._env.get_constraint_values()
+        episode_reward = 0
+        episode_length = 0
+
+        number_of_steps = self._config.steps_per_epoch * self._config.epochs
+
+        for step in range(number_of_steps):
+            # Randomly sample episode_ for some initial steps
+            action = self._env.action_space.sample() if step < self._config.start_steps \
+                     else self._get_action(observation, c)
+            
+            observation_next, reward, done, _ = self._env.step(action)
+            episode_reward += reward
+            episode_length += 1
+
+            self._replay_buffer.add({
+                "observation": self._flatten_dict(observation),
+                "action": action,
+                "reward": np.asarray(reward) * self._config.reward_scale,
+                "observation_next": self._flatten_dict(observation_next),
+                "done": np.asarray(done),
+            })
+
+            observation = observation_next
+            c = self._env.get_constraint_values()
+
+            # Check if constraint violated?
+            # Check if episode is done
+
+            # Make all updates at the end of the episode
+            # Check if the epoch is over
+            self.evaluate()
+        
+        self._writer.close()
+        print("==========================================================")
+        print(f"Finished DDPG training. Time spent: {(time.time() - start_time) // 1} secs")
+        print("==========================================================")

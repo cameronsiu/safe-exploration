@@ -47,6 +47,8 @@ class SafetyLayer:
         for_each(lambda x: x.train(), self._models)
 
     def _initialize_constraint_models(self):
+        # For ballnd, this is just 2 constraints (min and max x)
+        # for spaceship, we have 4 constraints (min_x, max_x, min_y, max_y)
         self._models = [ConstraintModel(self._env.observation_space["agent_position"].shape[0],
                                         self._env.action_space.shape[0]) \
                         for _ in range(self._num_constraints)]

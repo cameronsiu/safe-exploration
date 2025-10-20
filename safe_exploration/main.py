@@ -57,6 +57,8 @@ class Trainer:
 
         ddpg.train()
 
+        ddpg.test()
+
 
 if __name__ == '__main__':
     Trainer().train()
