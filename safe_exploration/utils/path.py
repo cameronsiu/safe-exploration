@@ -6,7 +6,7 @@ def get_project_root_dir() -> Path:
     # Get the file path of the caller
     current_file = Path(inspect.getfile(inspect.currentframe().f_back)).resolve()
     # Move up two levels: src/safe_exploration -> src -> project root
-    return current_file.parents[3]
+    return current_file.parents[2]
 
 def get_config_path(filename: str = "defaults.yml") -> Path:
     """Return the absolute path to the config file."""
