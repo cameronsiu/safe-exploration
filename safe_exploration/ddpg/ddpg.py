@@ -19,12 +19,13 @@ class DDPG:
                  critic,
                  action_modifier=None):
         self._env = env
-        self._actor = actor
-        self._critic = critic
+        self._actor = actor # the policy neural network DELETE
+        self._critic = critic # the value function neural network (Q value) DELETE
         self._action_modifier = action_modifier
 
         self._config = Config.get().ddpg.trainer
 
+        # TODO: cameron: why do we need target networks? DELETE
         self._initialize_target_networks()
         self._initialize_optimizers()
 
@@ -261,6 +262,12 @@ class DDPG:
         print(f"Finished DDPG training. Time spent: {(time.time() - start_time) // 1} secs")
         print("==========================================================")
 
+        self._output_train_model()
+        
+    def _output_train_model(self, out_model_file):
+        state_dict = self.state_dict()
+        torch.save(state_dict, out_model_file)
+
     # TODO: check how RL assignments test
     def test(self):
         
@@ -310,3 +317,7 @@ class DDPG:
         print("==========================================================")
         print(f"Finished DDPG training. Time spent: {(time.time() - start_time) // 1} secs")
         print("==========================================================")
+
+    def load(self, in_file):
+        state_dict = torch.load(in_file)
+        self.load_state_dict(state_dict)
