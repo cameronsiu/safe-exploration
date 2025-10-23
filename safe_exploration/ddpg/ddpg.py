@@ -17,7 +17,8 @@ class DDPG:
                  env,
                  actor,
                  critic,
-                 action_modifier=None):
+                 action_modifier=None,
+                 render=False):
         self._env = env
         self._actor = actor
         self._critic = critic
@@ -44,6 +45,8 @@ class DDPG:
 
         if self._config.use_gpu:
             self._cuda()
+
+        self._render = render
 
     def _as_tensor(self, ndarray, requires_grad=False):
         tensor = torch.Tensor(ndarray)
@@ -224,6 +227,9 @@ class DDPG:
                      else self._get_action(observation, c)
             
             observation_next, reward, done, _ = self._env.step(action)
+            if self._render:
+                self._env.render_env()
+                
             episode_reward += reward
             episode_length += 1
 

@@ -33,7 +33,7 @@ arguments:
         help: "Ball-ND environment configuration."
         properties:
           - name: "n"
-            default: 1
+            default: 2
           - name: "target_margin"
             default: 0.2
           - name: "agent_slack"
@@ -142,4 +142,4 @@ arguments:
           - name: "task"
             default: "ballnd"
           - name: "use_safety_layer"
-            default: true
+            default: false

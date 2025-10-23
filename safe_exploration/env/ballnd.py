@@ -2,6 +2,7 @@ import gym
 from gym.spaces import Box, Dict
 import numpy as np
 from numpy import linalg as LA
+import pygame
 
 from safe_exploration.core.config import Config
 
@@ -20,6 +21,10 @@ class BallND(gym.Env):
 
         # Sets all the episode specific variables
         self.reset()
+
+        self.window = None
+        self.clock = None
+        self.window_size = 1024
         
     def reset(self):
         self._agent_position = 0.5 * np.ones(self._config.n,  dtype=np.float32)
@@ -97,3 +102,46 @@ class BallND(gym.Env):
                or int(self._current_time // 1) > self._config.episode_length
 
         return observation, step_reward, done, {}
+    
+    def render_env(self):
+        if self.window is None:
+            pygame.init()
+            pygame.display.init()
+            self.window = pygame.display.set_mode(
+                (self.window_size, self.window_size)
+            )
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
+
+        canvas = pygame.Surface((self.window_size, self.window_size))
+        canvas.fill((255, 255, 255))
+        pix_square_size = 50
+
+        # First we draw the target
+        target_screen_position = self.window_size * self._target_position
+        pygame.draw.rect(
+            canvas,
+            (255, 0, 0),
+            pygame.Rect(
+                (target_screen_position[0], target_screen_position[1]),
+                (pix_square_size, pix_square_size),
+            ),
+        )
+        # Now we draw the agent
+        agent_screen_position = self._agent_position * self.window_size
+        pygame.draw.circle(
+            canvas,
+            (0, 0, 255),
+            [int(agent_screen_position[0]), int(agent_screen_position[1])],
+            10,
+            #pix_square_size / 3,
+        )
+
+        # The following line copies our drawings from `canvas` to the visible window
+        self.window.blit(canvas, canvas.get_rect())
+        pygame.event.pump()
+        pygame.display.update()
+
+        # We need to ensure that human-rendering occurs at the predefined framerate.
+        # The following line will automatically add a delay to keep the framerate stable.
+        self.clock.tick(20)
