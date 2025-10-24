@@ -143,3 +143,8 @@ arguments:
             default: "ballnd"
           - name: "use_safety_layer"
             default: true
+          - name: "output_folder"
+            default: "./output/"
+          - name: "test"
+            default: false
+

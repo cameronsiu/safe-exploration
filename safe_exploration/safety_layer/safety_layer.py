@@ -194,3 +194,10 @@ class SafetyLayer:
         for i, model in enumerate(self._models):
             constraint_state_dict = model.state_dict()
             torch.save(constraint_state_dict, output_folder + f"constraint_model_{i}.pt")
+
+    def load(self, output_folder: str):
+        for i, model in enumerate(self._models):
+            # cameron: add map_location=self._device?
+            constraint_state_dict = torch.load(output_folder + f"constraint_model_{i}.pt")
+            model.load_state_dict(constraint_state_dict)
+

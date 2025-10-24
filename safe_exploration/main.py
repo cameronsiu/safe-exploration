@@ -41,24 +41,44 @@ class Trainer:
 
         env = BallND() if self._config.task == "ballnd" else Spaceship()
 
-        output_folder = "./output/"
+        # TODO: Add load weights and continue training more?
 
-        safety_layer = None
-        if self._config.use_safety_layer:
-            safety_layer = SafetyLayer(env)
-            safety_layer.train(output_folder)
-        
-        observation_dim = (seq(env.observation_space.spaces.values())
-                            .map(lambda x: x.shape[0])
-                            .sum())
+        if not self._config.test:
 
-        actor = Actor(observation_dim, env.action_space.shape[0])
-        critic = Critic(observation_dim, env.action_space.shape[0])
+            safety_layer = None
+            if self._config.use_safety_layer:
+                safety_layer = SafetyLayer(env)
+                safety_layer.train(self._config.output_folder)
+            
+            observation_dim = (seq(env.observation_space.spaces.values())
+                                .map(lambda x: x.shape[0])
+                                .sum())
 
-        safe_action_func = safety_layer.get_safe_action if safety_layer else None
-        ddpg = DDPG(env, actor, critic, safe_action_func)
+            actor = Actor(observation_dim, env.action_space.shape[0])
+            critic = Critic(observation_dim, env.action_space.shape[0])
 
-        ddpg.train(output_folder)        
+            safe_action_func = safety_layer.get_safe_action if safety_layer else None
+            ddpg = DDPG(env, actor, critic, safe_action_func)
+
+            ddpg.train(self._config.output_folder)
+        else:
+
+            safety_layer = None
+            if self._config.use_safety_layer:
+                safety_layer = SafetyLayer(env)
+                safety_layer.load(self._config.output_folder)
+            
+            observation_dim = (seq(env.observation_space.spaces.values())
+                                .map(lambda x: x.shape[0])
+                                .sum())
+
+            actor = Actor(observation_dim, env.action_space.shape[0])
+            critic = Critic(observation_dim, env.action_space.shape[0])
+
+            safe_action_func = safety_layer.get_safe_action if safety_layer else None
+            ddpg = DDPG(env, actor, critic, safe_action_func)
+
+            ddpg.load(self._config.output_folder)
 
 
 if __name__ == '__main__':
