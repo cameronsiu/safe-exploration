@@ -39,7 +39,7 @@ arguments:
           - name: "agent_slack"
             default: 0.05
           - name: "episode_length"
-            default: 1
+            default: 30
           - name: "frequency_ratio"
             default: 0.1
           - name: "respawn_interval"
@@ -71,11 +71,11 @@ arguments:
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 1
+          default: 100
         - name: "steps_per_epoch"
-          default: 6
+          default: 6000
         - name: "evaluation_steps"
-          default: 15
+          default: 1500
         - name: "batch_size"
           default: 256
         - name: "max_episode_length"
