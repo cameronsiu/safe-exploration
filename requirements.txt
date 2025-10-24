@@ -5,3 +5,4 @@ tensorboardx
 tensorboard
 gym
 pyyaml
+pygame
