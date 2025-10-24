@@ -14,28 +14,23 @@ class ObstacleAvoid(gym.Env):
         # Set the properties for spaces
         # cameron: the action space are velocity commands we send to the ball
         # It is one dimensional
+
+        num_lidars = 16
+        self._lidar_directions = self._make_lidar_directions(num_lidars)
+
         self.action_space = Box(low=-1, high=1, shape=(2,), dtype=np.float32)
         self.observation_space = Dict({
             'agent_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
             'target_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
-            'lidar_readings': Box(low=0, high=1, shape=(8,), dtype=np.float32)
+            'lidar_readings': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32)
         })
 
         # Sets all the episode specific variables
         self._obstacles = np.array([
-            [0.35, 0.35, 0.3, 0.3]
+            [0.0,  0.45, 0.20, 0.1],
+            [0.4, 0.45, 0.20, 0.1],
+            [0.8, 0.45, 0.20, 0.1]
         ])
-        dirs = np.array([
-            [1, 0.01],
-            [1, 1],
-            [0.01, 1],
-            [-1, 1],
-            [-1, 0.01],
-            [-1, -1],
-            [0.01, -1],
-            [1, -1],
-        ])
-        self._lidar_directions = dirs / np.expand_dims(np.linalg.norm(dirs, axis=1), axis=1)
 
         self._step_timestamp = time.time()
         self.reset()
@@ -44,78 +39,25 @@ class ObstacleAvoid(gym.Env):
         self.clock = None
         self.window_size = 1024
 
+    def _make_lidar_directions(self, number_of_rays):
+        lidar_directions = np.zeros((number_of_rays, 2))
+        spacing = 2 * np.pi / number_of_rays
+        for i in range(number_of_rays):
+            # add 0.001 so there aren't flat/vertical lines
+            angle = i * spacing + 0.001
+            x = np.cos(angle)
+            y = np.sin(angle)
+            lidar_directions[i] = np.array([x, y])
+
+        return lidar_directions
+
+
     def point_in_boxes(self, point, box_set):
         return (point[0] >= box_set[:, 0]) & \
             (point[0] <= (box_set[:, 0] + box_set[:, 2])) & \
             (point[1] >= box_set[:, 1]) & \
             (point[1] <= (box_set[:, 1] + box_set[:, 3]))
-
-    def raycast_horizontal_linesegments(self, ray_origin, ray_direction, line_set):
-        # line_set is [y, x0, x1]
-        assert ray_origin.shape == (2,)
-        assert ray_direction.shape == (2,)
-        assert line_set.shape[1] == 3
-
-        y_diff = line_set[:, 0] - ray_origin[1]
-        ray_x_at_y = ray_direction[0] / ray_direction[1] * y_diff + ray_origin[0]
-        intersect_points = np.stack([ray_x_at_y, line_set[:, 0]], axis=1)
-        
-        difference = intersect_points - ray_origin
-        distances = np.linalg.norm(difference, axis=1)
-        in_ray_direction = np.all((ray_direction > 0) == (difference > 0), axis=1)
-        
-        intersects = ((ray_x_at_y >= line_set[:, 1]) & (ray_x_at_y <= line_set[:, 2])) | \
-            ((ray_x_at_y >= line_set[:, 2]) & (ray_x_at_y <= line_set[:, 1]))
-        valid = in_ray_direction & intersects
-        
-        distances[~valid] = 1.
-
-        return np.min(distances)
-
-
-    def raycast_vertical_linesegments(self, ray_origin, ray_direction, line_set):
-        # line_set is [x, y0, y1]
-        assert ray_origin.shape == (2,)
-        assert ray_direction.shape == (2,)
-        assert line_set.shape[1] == 3
-
-        x_diff = line_set[:, 0] - ray_origin[0]
-        ray_y_at_x = ray_direction[1] / ray_direction[0] * x_diff + ray_origin[1]
-        intersect_points = np.stack([line_set[:, 0], ray_y_at_x], axis=1)
-        
-        difference = intersect_points - ray_origin
-        distances = np.linalg.norm(difference, axis=1)
-        in_ray_direction = np.all((ray_direction > 0) == (difference > 0), axis=1)
-        
-        intersects = ((ray_y_at_x >= line_set[:, 1]) & (ray_y_at_x <= line_set[:, 2])) | \
-            ((ray_y_at_x >= line_set[:, 2]) & (ray_y_at_x <= line_set[:, 1]))
-        valid = in_ray_direction & intersects
-        
-        distances[~valid] = 1.
-
-        return np.min(distances)
-
-
-    def raycast_boxes(self, ray_origin, ray_direction, box_set):
-        horizontal_linesegments = np.concat(
-            [
-                np.stack([box_set[:, 1], box_set[:, 0], box_set[:, 0] + box_set[:, 2]], axis=1),
-                np.stack([box_set[:, 1] + box_set[:, 3], box_set[:, 0], box_set[:, 0] + box_set[:, 2]], axis=1),
-            ],
-            axis=0
-        )
-        min_horizontal = self.raycast_horizontal_linesegments(ray_origin, ray_direction, horizontal_linesegments)
-
-        vertical_linesegments = np.concat(
-            [
-                np.stack([box_set[:, 0], box_set[:, 1], box_set[:, 1] + box_set[:, 3]], axis=1),
-                np.stack([box_set[:, 0] + box_set[:, 2], box_set[:, 1], box_set[:, 1] + box_set[:, 3]], axis=1),
-            ],
-            axis=0
-        )
-        min_vertical = self.raycast_vertical_linesegments(ray_origin, ray_direction, vertical_linesegments)
-
-        return np.min([min_horizontal, min_vertical])
+    
     
     def ray_aabb2d_distances(
         self,
@@ -189,19 +131,16 @@ class ObstacleAvoid(gym.Env):
         
         
     def reset(self):
-        agent_radians = np.random.random(1) * 2 * np.pi
-        agent_distance = np.random.random(1) * 0.2 + 0.3
-        self._agent_position = np.array([
-            (agent_distance * np.cos(agent_radians))[0] + 0.5,
-            (agent_distance * np.sin(agent_radians))[0] + 0.5
-        ])
+        agent_position = np.random.random(2)
+        target_position = np.random.random(2)
+        agent_on_top = np.random.random(1)[0] > 0.5
 
-        obstacle_radians = agent_radians + np.pi + np.random.random(1) * 2 * np.pi * 0.10
-        obstacle_distance = np.random.random(1) * 0.2 + 0.3
-        self._target_position = np.array([
-            (obstacle_distance * np.cos(obstacle_radians))[0] + 0.5,
-            (obstacle_distance * np.sin(obstacle_radians))[0] + 0.5
-        ])
+        if agent_on_top:
+            self._agent_position = np.array([0, 1]) + agent_position * np.array([1, -0.25])
+            self._target_position = np.array([0, 0]) + target_position * np.array([1, 0.25])
+        else:
+            self._agent_position = np.array([0, 0]) + agent_position * np.array([1, 0.25])
+            self._target_position = np.array([0, 1]) + target_position * np.array([1, -0.25])
 
         self._current_time = 0.
 
@@ -210,26 +149,24 @@ class ObstacleAvoid(gym.Env):
         return self.step(np.zeros(2))[0]
     
     def _reset_target_location(self):
+        agent_on_top = self._agent_position[1] > 0.5
+        target_position = np.random.random(2)
 
-        centered_agent_position = self._agent_position - 0.5
-        agent_radians = np.arctan2(centered_agent_position[1], centered_agent_position[0])
-        obstacle_radians = agent_radians + np.pi + ((np.random.random(1) - 0.5) * np.pi)
-        obstacle_distance = np.random.random(1) * 0.2 + 0.3
-        self._target_position = np.array([
-            (obstacle_distance * np.cos(obstacle_radians))[0] + 0.5,
-            (obstacle_distance * np.sin(obstacle_radians))[0] + 0.5
-        ])
+        if agent_on_top:
+            self._target_position = np.array([0, 0]) + target_position * np.array([1, 0.25])
+        else:
+            self._target_position = np.array([0, 1]) + target_position * np.array([1, -0.25])
     
     def _get_reward(self, initial_position, final_position, action):
         if self._config.enable_reward_shaping and self._is_agent_outside_shaping_boundary():
             return -1
         else:
-            initial_distance = LA.norm(initial_position - self._target_position)
-            final_distance = LA.norm(final_position - self._target_position)
-            distance_change = final_distance - initial_distance
-            action_size = LA.norm(action)
+            # Square each distance so being closer is more valuable
+            sq_initial_distance = (1 - LA.norm(initial_position - self._target_position)) ** 2
+            sq_final_distance = (1 - LA.norm(final_position - self._target_position)) ** 2
+            distance_change = sq_final_distance - sq_initial_distance
 
-            return -distance_change - 0.01 * action_size
+            return distance_change
     
     def _move_agent(self, velocity):
         # Assume that frequency of motor is 1 (one action per second)

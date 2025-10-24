@@ -280,7 +280,8 @@ class DDPG:
                 eval_start = time.time()
                 epoch_number = int(step / self._config.steps_per_epoch)
                 print(f"Finished epoch {epoch_number}. Running validation ...")
-                self.evaluate(epoch_number % 20 == 0)
+                should_render = epoch_number % 10 == 0
+                self.evaluate(should_render)
                 eval_end = time.time()
                 time_eval += eval_end - eval_start
                 print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
