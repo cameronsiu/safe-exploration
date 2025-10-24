@@ -144,7 +144,13 @@ arguments:
           - name: "use_safety_layer"
             default: true
           - name: "output_folder"
-            default: "./output/"
+            default: "./output"
+          - name: "actor_model_file"
+            default: "./output/actor.pt"
+          - name: "critic_model_file"
+            default: "./output/critic.pt"
+          - name: "constraint_model_files"
+            default: ["./output/constraint_model_0.pt", "./output/constraint_model_1.pt"]
           - name: "test"
             default: false
 

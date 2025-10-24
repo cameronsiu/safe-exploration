@@ -1,7 +1,9 @@
 from datetime import datetime
 from functional import seq
-import numpy as np
+from typing import List
 import time
+
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.optim import Adam
@@ -13,7 +15,7 @@ from safe_exploration.safety_layer.constraint_model import ConstraintModel
 from safe_exploration.utils.list import for_each
 
 class SafetyLayer:
-    def __init__(self, env):
+    def __init__(self, env, constraint_model_files:List[str]=None):
         self._env = env
 
         self._config = Config.get().safety_layer.trainer
@@ -21,6 +23,9 @@ class SafetyLayer:
         self._num_constraints = env.get_num_constraints()
 
         self._initialize_constraint_models()
+
+        if constraint_model_files is not None:
+            self.load(constraint_model_files)
 
         self._replay_buffer = ReplayBuffer(self._config.replay_buffer_size)
 
@@ -144,7 +149,7 @@ class SafetyLayer:
 
         return action_new
 
-    def train(self, output_folder: str):
+    def train(self, output_folder:str):
 
         start_time = time.time()
 
@@ -192,12 +197,12 @@ class SafetyLayer:
         print("==========================================================")
 
         for i, model in enumerate(self._models):
-            constraint_state_dict = model.state_dict()
-            torch.save(constraint_state_dict, output_folder + f"constraint_model_{i}.pt")
+            model.save(output_folder, i)
 
-    def load(self, output_folder: str):
-        for i, model in enumerate(self._models):
+    def load(self, constraint_model_files: str):
+        for model, constraint_model_file in zip(self._models, constraint_model_files):
             # cameron: add map_location=self._device?
-            constraint_state_dict = torch.load(output_folder + f"constraint_model_{i}.pt")
+            # assumes that the list of constraint files will be the same amount of models
+            constraint_state_dict = torch.load(constraint_model_file)
             model.load_state_dict(constraint_state_dict)
 
