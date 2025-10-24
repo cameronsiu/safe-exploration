@@ -1,18 +1,17 @@
 # safe-exploration
 Reimplemented https://github.com/AgrawalAmey/safe-explorer
 
+## Requirements
+
+- Follow the instructions to install uv (https://github.com/astral-sh/uv)
+- Install Python 3.11: `uv python install 3.11`
+
 
 ## Installation
 
 Inside the root directory:
 ```
-python3 -m venv venv
-source venv/bin/activate
-pip install -e .
-```
-
-## Train
-
-```
-python3 -m safe_exploration.main 
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
 ```
