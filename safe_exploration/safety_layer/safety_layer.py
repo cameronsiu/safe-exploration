@@ -144,7 +144,7 @@ class SafetyLayer:
 
         return action_new
 
-    def train(self):
+    def train(self, output_folder: str):
 
         start_time = time.time()
 
@@ -190,3 +190,7 @@ class SafetyLayer:
         print("==========================================================")
         print(f"Finished training constraint model. Time spent: {(time.time() - start_time) // 1} secs")
         print("==========================================================")
+
+        for i, model in enumerate(self._models):
+            constraint_state_dict = model.state_dict()
+            torch.save(constraint_state_dict, output_folder + f"constraint_model_{i}.pt")
