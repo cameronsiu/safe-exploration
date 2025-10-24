@@ -150,7 +150,7 @@ arguments:
           - name: "critic_model_file"
             default: "./output/critic.pt"
           - name: "constraint_model_files"
-            default: ["./output/constraint_model_0.pt", "./output/constraint_model_1.pt"]
+            default: ["./output/constraint_0.pt", "./output/constraint_1.pt"]
           - name: "test"
             default: false
 
