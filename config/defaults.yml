@@ -43,13 +43,32 @@ arguments:
           - name: "frequency_ratio"
             default: 0.1
           - name: "respawn_interval"
-            default: 0.5
+            default: 4
           - name: "target_noise_std"
             default: 0.05
           - name: "enable_reward_shaping"
             default: false
           - name: "reward_shaping_slack"
-            default: 0.1          
+            default: 0.1
+      - name: "obstacleavoid"
+        help: "Avoiding obstacles while getting to a goal."
+        properties:
+          - name: "target_margin"
+            default: 0.2
+          - name: "agent_slack"
+            default: 0.05
+          - name: "episode_length"
+            default: 30
+          - name: "frequency_ratio"
+            default: 0.1
+          - name: "respawn_interval"
+            default: 4
+          - name: "target_noise_std"
+            default: 0.05
+          - name: "enable_reward_shaping"
+            default: false
+          - name: "reward_shaping_slack"
+            default: 0.1
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -57,14 +76,14 @@ arguments:
       help: "Actor network parameters."
       properties:
         - name: "layers"
-          default: [128, 64]
+          default: [32, 16]
         - name: "init_bound"
           default: 0.003
     - name: "critic"
       help: "Critic network parameters."
       properties:
         - name: "layers"
-          default: [64, 128, 32]
+          default: [32, 16]
         - name: "init_bound"
           default: 0.003
     - name: "trainer"
@@ -75,7 +94,7 @@ arguments:
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
-          default: 1500
+          default: 600
         - name: "batch_size"
           default: 256
         - name: "max_episode_length"
@@ -140,6 +159,6 @@ arguments:
           - name: "seed"
             default: 0
           - name: "task"
-            default: "ballnd"
+            default: "obstacleavoid"
           - name: "use_safety_layer"
             default: false

@@ -5,6 +5,7 @@ import torch
 from safe_exploration.core.config import Config
 from safe_exploration.env.ballnd import BallND
 from safe_exploration.env.spaceship import Spaceship
+from safe_exploration.env.obstacle_avoid import ObstacleAvoid
 from safe_exploration.ddpg.actor import Actor
 from safe_exploration.ddpg.critic import Critic
 from safe_exploration.ddpg.ddpg import DDPG
@@ -39,7 +40,9 @@ class Trainer:
         Config.get().pprint()
         print("============================================================")
 
-        env = BallND() if self._config.task == "ballnd" else Spaceship()
+        env = BallND() if self._config.task == "ballnd" else \
+            ObstacleAvoid() if self._config.task == "obstacleavoid" else \
+            Spaceship()
 
         if self._config.use_safety_layer:
             safety_layer = SafetyLayer(env)
@@ -55,7 +58,7 @@ class Trainer:
         critic = Critic(observation_dim, env.action_space.shape[0])
 
         safe_action_func = safety_layer.get_safe_action if safety_layer else None
-        ddpg = DDPG(env, actor, critic, safe_action_func, render=True)
+        ddpg = DDPG(env, actor, critic, safe_action_func, render_training=False, render_evaluation=True)
 
         ddpg.train()
 

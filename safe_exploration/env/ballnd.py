@@ -144,4 +144,4 @@ class BallND(gym.Env):
 
         # We need to ensure that human-rendering occurs at the predefined framerate.
         # The following line will automatically add a delay to keep the framerate stable.
-        self.clock.tick(20)
+        self.clock.tick(10)

@@ -18,7 +18,8 @@ class DDPG:
                  actor,
                  critic,
                  action_modifier=None,
-                 render=False):
+                 render_training=False,
+                 render_evaluation=False):
         self._env = env
         self._actor = actor
         self._critic = critic
@@ -46,7 +47,8 @@ class DDPG:
         if self._config.use_gpu:
             self._cuda()
 
-        self._render = render
+        self._render_training = render_training
+        self._render_evaluation = render_evaluation
 
     def _as_tensor(self, ndarray, requires_grad=False):
         tensor = torch.Tensor(ndarray)
@@ -157,7 +159,7 @@ class DDPG:
         for_each(lambda x: self._update_batch(),
                  range(min(episode_length, self._config.max_updates_per_episode)))
 
-    def evaluate(self):
+    def evaluate(self, render):
         episode_rewards = []
         episode_lengths = []
         episode_actions = []
@@ -174,6 +176,10 @@ class DDPG:
             action = self._get_action(observation, c, is_training=False)
             episode_action += np.absolute(action)
             observation, reward, done, _ = self._env.step(action)
+            
+            if render:
+                self._env.render_env()
+
             c = self._env.get_constraint_values()
             episode_reward += reward
             episode_length += 1
@@ -218,17 +224,24 @@ class DDPG:
         c = self._env.get_constraint_values()
         episode_reward = 0
         episode_length = 0
+        step_trained_on = 0
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
+        time_simulating = 0
+        time_training = 0
+        time_eval = 0
+
         for step in range(number_of_steps):
+            sim_start = time.time()
             # Randomly sample episode_ for some initial steps
             action = self._env.action_space.sample() if step < self._config.start_steps \
                      else self._get_action(observation, c)
             
-            observation_next, reward, done, _ = self._env.step(action)
-            if self._render:
+            if self._render_training:
                 self._env.render_env()
+            
+            observation_next, reward, done, _ = self._env.step(action)
                 
             episode_reward += reward
             episode_length += 1
@@ -243,11 +256,17 @@ class DDPG:
 
             observation = observation_next
             c = self._env.get_constraint_values()
+            sim_end = time.time()
+            time_simulating += sim_end - sim_start
 
             # Make all updates at the end of the episode
             if done or (episode_length == self._config.max_episode_length):
-                if step >= self._config.min_buffer_fill:
+                if step >= self._config.min_buffer_fill and (step - step_trained_on) >= self._config.max_episode_length:
+                    update_start = time.time()
                     self._update(episode_length)
+                    step_trained_on = step
+                    update_end = time.time()
+                    time_training += update_end - update_start
                 # Reset episode
                 observation = self._env.reset()
                 c = self._env.get_constraint_values()
@@ -258,9 +277,15 @@ class DDPG:
 
             # Check if the epoch is over
             if step != 0 and step % self._config.steps_per_epoch == 0: 
-                print(f"Finished epoch {step / self._config.steps_per_epoch}. Running validation ...")
-                self.evaluate()
+                eval_start = time.time()
+                epoch_number = int(step / self._config.steps_per_epoch)
+                print(f"Finished epoch {epoch_number}. Running validation ...")
+                self.evaluate(epoch_number % 20 == 0)
+                eval_end = time.time()
+                time_eval += eval_end - eval_start
+                print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
                 print("----------------------------------------------------------")
+            
         
         self._writer.close()
         print("==========================================================")
