@@ -1,7 +1,9 @@
 from datetime import datetime
 from functional import seq
-import numpy as np
+from typing import List
 import time
+
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.optim import Adam
@@ -13,14 +15,15 @@ from safe_exploration.safety_layer.constraint_model import ConstraintModel
 from safe_exploration.utils.list import for_each
 
 class SafetyLayer:
-    def __init__(self, env, render = False):
+    def __init__(self, env, constraint_model_files:List[str], render = False):    
         self._env = env
-
         self._config = Config.get().safety_layer.trainer
 
         self._num_constraints = env.get_num_constraints()
+        if self._num_constraints != len(constraint_model_files):
+            constraint_model_files = [None]*self._num_constraints
 
-        self._initialize_constraint_models()
+        self._initialize_constraint_models(constraint_model_files)
 
         self._replay_buffer = ReplayBuffer(self._config.replay_buffer_size)
 
@@ -53,13 +56,14 @@ class SafetyLayer:
             inp = np.concatenate(list(inp.values()))
         return inp
 
-    def _initialize_constraint_models(self):
+    def _initialize_constraint_models(self, constraint_model_files: List[str]):
         observation_dim = (seq(self._env.observation_space.spaces.values())
                             .map(lambda x: x.shape[0])
                             .sum())
         self._models = [ConstraintModel(observation_dim,
-                                        self._env.action_space.shape[0]) \
-                        for _ in range(self._num_constraints)]
+                                        self._env.action_space.shape[0], model_file) \
+                        for model_file in constraint_model_files]
+
         self._optimizers = [Adam(x.parameters(), lr=self._config.lr) for x in self._models]
 
     def _sample_steps(self, num_steps):
@@ -159,7 +163,7 @@ class SafetyLayer:
 
         return action_new
 
-    def train(self):
+    def train(self, output_folder:str):
 
         start_time = time.time()
 
@@ -205,3 +209,7 @@ class SafetyLayer:
         print("==========================================================")
         print(f"Finished training constraint model. Time spent: {(time.time() - start_time) // 1} secs")
         print("==========================================================")
+
+        for i, model in enumerate(self._models):
+            model.save(output_folder, i)
+

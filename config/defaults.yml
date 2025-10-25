@@ -162,3 +162,14 @@ arguments:
             default: "obstacleavoid"
           - name: "use_safety_layer"
             default: true
+          - name: "output_folder"
+            default: "./output"
+          - name: "actor_model_file"
+            default: "./output/actor.pt"
+          - name: "critic_model_file"
+            default: "./output/critic.pt"
+          - name: "constraint_model_files"
+            default: "./output/constraint_*.pt"
+          - name: "test"
+            default: false
+

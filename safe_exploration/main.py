@@ -1,4 +1,7 @@
 from functional import seq
+from pathlib import Path
+import glob
+
 import numpy as np
 import torch
 
@@ -44,9 +47,34 @@ class Trainer:
             ObstacleAvoid() if self._config.task == "obstacleavoid" else \
             Spaceship()
 
+        actor_file = Path(self._config.actor_model_file)
+        critic_file = Path(self._config.critic_model_file)
+
+        actor_model_file = None
+        if actor_file.exists():
+            print(f"Loading actor file {self._config.actor_model_file}")
+            actor_model_file = self._config.actor_model_file
+        else:
+            print(f"Actor model file does not exist {self._config.actor_model_file}")
+
+        critic_model_file = None
+        if critic_file.exists():
+            print(f"Loading critic file {self._config.critic_model_file}")
+            critic_model_file = self._config.critic_model_file
+        else:
+            print(f"Critic model file does not exist {self._config.critic_model_file}")
+
+        constraint_model_files = glob.glob(self._config.constraint_model_files)
+        print(f"Loading constraint model files: {constraint_model_files}")
+
+        safety_layer = None
         if self._config.use_safety_layer:
-            safety_layer = SafetyLayer(env, render=False)
-            safety_layer.train()
+            safety_layer = SafetyLayer(env, constraint_model_files, render=False)
+            
+            if not self._config.test:
+                safety_layer.train(self._config.output_folder)
+            else:
+                safety_layer.evaluate()
         else:
             safety_layer = None
         
@@ -54,13 +82,16 @@ class Trainer:
                             .map(lambda x: x.shape[0])
                             .sum())
 
-        actor = Actor(observation_dim, env.action_space.shape[0])
-        critic = Critic(observation_dim, env.action_space.shape[0])
+        actor = Actor(observation_dim, env.action_space.shape[0], actor_model_file)
+        critic = Critic(observation_dim, env.action_space.shape[0], critic_model_file)
 
         safe_action_func = safety_layer.get_safe_action if safety_layer else None
         ddpg = DDPG(env, actor, critic, safe_action_func, render_training=True, render_evaluation=True)
-
-        ddpg.train()
+        
+        if not self._config.test:
+            ddpg.train(self._config.output_folder)
+        else:
+            ddpg.evaluate()
 
 
 if __name__ == '__main__':

@@ -240,7 +240,7 @@ class DDPG:
               f"Average reward: {mean_episode_reward}\n"
               f"Average action magnitude: {np.mean(episode_actions)}")
 
-    def train(self):
+    def train(self, output_folder: str):
         
         start_time = time.time()
 
@@ -330,3 +330,7 @@ class DDPG:
         print("==========================================================")
         print(f"Finished DDPG training. Time spent: {(time.time() - start_time) // 1} secs")
         print("==========================================================")
+
+        self._actor.save(output_folder)
+        self._critic.save(output_folder)
+
