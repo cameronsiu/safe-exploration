@@ -13,10 +13,5 @@ RUN echo "isaac-sim ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 USER isaac-sim
 WORKDIR /isaac-sim
 
-# Set environment to run VS Code Remote container properly
-
-# If you have additional dev-dependencies (vim, python, ros, etc), install here
-# For example:
-# RUN sudo apt-get update && sudo apt-get install -y python3-pip
-
-# (Optional) Add VS Code remote-container configuration, e.g. setting up shell or dotfiles
+# Adding git autocompletion
+RUN echo 'if [ -f /usr/share/bash-completion/completions/git ]; then . /usr/share/bash-completion/completions/git; fi' >> /isaac-sim/.bashrc
