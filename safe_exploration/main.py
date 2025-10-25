@@ -45,7 +45,7 @@ class Trainer:
             Spaceship()
 
         if self._config.use_safety_layer:
-            safety_layer = SafetyLayer(env)
+            safety_layer = SafetyLayer(env, render=False)
             safety_layer.train()
         else:
             safety_layer = None

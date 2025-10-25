@@ -13,7 +13,7 @@ from safe_exploration.safety_layer.constraint_model import ConstraintModel
 from safe_exploration.utils.list import for_each
 
 class SafetyLayer:
-    def __init__(self, env):
+    def __init__(self, env, render = False):
         self._env = env
 
         self._config = Config.get().safety_layer.trainer
@@ -31,6 +31,8 @@ class SafetyLayer:
 
         if self._config.use_gpu:
             self._cuda()
+
+        self._render = render
 
     def _as_tensor(self, ndarray, requires_grad=False):
         tensor = torch.Tensor(ndarray)
@@ -70,6 +72,9 @@ class SafetyLayer:
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action)
             c_next = self._env.get_constraint_values()
+
+            if self._render:
+                self._env.render_env()
 
             self._replay_buffer.add({
                 "action": action,
