@@ -77,10 +77,10 @@ class Trainer:
                 safety_layer.evaluate()
         else:
             safety_layer = None
-        
-        observation_dim = (seq(env.observation_space.spaces.values())
-                            .map(lambda x: x.shape[0])
-                            .sum())
+
+        obs_spaces = env.observation_space.spaces
+        relevant_keys = ["agent_position", "target_position"]
+        observation_dim = sum(obs_spaces[k].shape[0] for k in relevant_keys)
 
         actor = Actor(observation_dim, env.action_space.shape[0], actor_model_file)
         critic = Critic(observation_dim, env.action_space.shape[0], critic_model_file)

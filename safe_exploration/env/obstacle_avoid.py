@@ -22,8 +22,8 @@ class ObstacleAvoid(gym.Env):
         self.observation_space = Dict({
             'agent_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
             'target_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
-            #'nearest_lidar_distance': Box(low=0, high=1, shape=(1,), dtype=np.float32),
-            #'nearest_lidar_direction': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
+            # 'nearest_lidar_distance': Box(low=0, high=1, shape=(1,), dtype=np.float32),
+            # 'nearest_lidar_direction': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
             'lidar_readings': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32)
         })
 
@@ -170,13 +170,29 @@ class ObstacleAvoid(gym.Env):
     def _get_reward(self, initial_position, final_position, action):
         if self._config.enable_reward_shaping and self._is_agent_outside_shaping_boundary():
             return -1
-        else:
-            # Square each distance so being closer is more valuable
-            sq_initial_distance = (1 - LA.norm(initial_position - self._target_position)) ** 2
-            sq_final_distance = (1 - LA.norm(final_position - self._target_position)) ** 2
-            distance_change = sq_final_distance - sq_initial_distance
+        
+        # 2. Compute progress term
+        sq_initial_distance = (1 - LA.norm(initial_position - self._target_position)) ** 2
+        sq_final_distance = (1 - LA.norm(final_position - self._target_position)) ** 2
+        distance_change = sq_final_distance - sq_initial_distance
 
-            return distance_change
+        # 3. Absolute proximity reward (for staying close)
+        proximity = 1 - LA.norm(final_position - self._target_position)
+
+        # 4. Step cost (discourages wasting time)
+        time_penalty = 0.01
+
+        # 5. Small penalty for jerky motion or high speed
+        action_penalty = 0.1 * np.linalg.norm(action)
+
+        # 6. Combine terms
+        reward = distance_change + 0.1 * proximity - time_penalty - action_penalty
+
+        # 7. Optional success bonus
+        if LA.norm(final_position - self._target_position) < 0.05:
+            reward += 10.0
+
+        return reward
     
     def _move_agent(self, velocity):
         # Assume that frequency of motor is 1 (one action per second)
@@ -240,7 +256,7 @@ class ObstacleAvoid(gym.Env):
         # Prepare return payload
         observation = {
             "agent_position": self._agent_position,
-            "target_postion": self._get_noisy_target_position(), # cameron: target position has noise,
+            "target_position": self._get_noisy_target_position(), # cameron: target position has noise,
             #"nearest_lidar_distance": lidar_readings[nearest_lidar:nearest_lidar+1],
             #"nearest_lidar_direction": self._lidar_directions[nearest_lidar],
             "lidar_readings": self._get_lidar_readings()

@@ -53,13 +53,16 @@ class SafetyLayer:
 
     def _flatten_dict(self, inp):
         if type(inp) == dict:
-            inp = np.concatenate(list(inp.values()))
+            #agent_position = inp["agent_position"]
+            lidar_readings = inp["lidar_readings"]
+            inp = np.concatenate([lidar_readings])
         return inp
 
     def _initialize_constraint_models(self, constraint_model_files: List[str]):
-        observation_dim = (seq(self._env.observation_space.spaces.values())
-                            .map(lambda x: x.shape[0])
-                            .sum())
+        obs_spaces = self._env.observation_space.spaces
+        #relevant_keys = ["agent_position", "lidar_readings"]
+        relevant_keys = ["lidar_readings"]
+        observation_dim = sum(obs_spaces[k].shape[0] for k in relevant_keys)
         self._models = [ConstraintModel(observation_dim,
                                         self._env.action_space.shape[0], model_file) \
                         for model_file in constraint_model_files]
@@ -147,7 +150,7 @@ class SafetyLayer:
         g = [x(self._as_tensor(self._flatten_dict(observation)).view(1, -1)) for x in self._models]
         self._train_mode()
 
-        # Fidn the lagrange multipliers
+        # Find the lagrange multipliers
         g = [x.data.numpy().reshape(-1) for x in g]
         unclipped_multipliers = [(np.dot(g_i, action) + c_i) / np.dot(g_i, g_i) for g_i, c_i in zip(g, c)]
         multipliers = [np.clip(x, 0, np.inf) for x in unclipped_multipliers]
@@ -156,10 +159,6 @@ class SafetyLayer:
         correction = np.max(multipliers) * g[np.argmax(multipliers)]
 
         action_new = action - correction
-
-        agent_position = observation["agent_position"]
-        if agent_position[0] < 0.1 and agent_position[1] > 0.9:
-            pass
 
         return action_new
 
@@ -197,12 +196,10 @@ class SafetyLayer:
                     .map(lambda x: (f"{x[0]}_{x[1][0]}", x[1][1])) # (modified_param_name, param_data)
                     .for_each(lambda x: self._writer.add_histogram(x[0], x[1].data.numpy(), self._train_global_step)))
 
-
-
             self._train_global_step += 1
 
             print(f"Finished epoch {epoch} with losses: {losses}. Running validation ...")
-            self.evaluate()
+            # self.evaluate()
             print("----------------------------------------------------------")
         
         self._writer.close()

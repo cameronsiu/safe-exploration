@@ -119,7 +119,9 @@ class DDPG:
 
     def _flatten_dict(self, inp):
         if type(inp) == dict:
-            inp = np.concatenate(list(inp.values()))
+            agent_position = inp["agent_position"]
+            target_position = inp["target_position"]
+            inp = np.concatenate([agent_position, target_position])
         return inp
 
     def _update_targets(self, target, main):
@@ -262,16 +264,24 @@ class DDPG:
         time_training = 0
         time_eval = 0
 
+        safety_layer_print = True
+
         for step in range(number_of_steps):
             sim_start = time.time()
             # Randomly sample episode_ for some initial steps
-            action = self._env.action_space.sample() if step < self._config.start_steps \
-                     else self._get_action(observation, c)
             
-            if self._render_training:
-                self._env.render_env()
+            if step < self._config.start_steps:
+                action = self._env.action_space.sample()
+            else:
+                if safety_layer_print:
+                    print("Safety layer is now on")
+                    safety_layer_print = False
+                action = self._get_action(observation, c)
             
             observation_next, reward, done, _ = self._env.step(action)
+
+            if self._render_training:
+                self._env.render_env()
                 
             episode_reward += reward
             episode_length += 1
@@ -306,24 +316,24 @@ class DDPG:
                 self._writer.add_scalar("episode reward", episode_reward)
 
             # Check if the epoch is over
-            if step != 0 and step % self._config.steps_per_epoch == 0: 
-                eval_start = time.time()
-                epoch_number = int(step / self._config.steps_per_epoch)
-                print(f"Finished epoch {epoch_number}. Running validation ...")
-                should_render = epoch_number % 10 == 0
-                self.evaluate(should_render)
-                eval_end = time.time()
-                time_eval += eval_end - eval_start
-                print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
+            # if step != 0 and step % self._config.steps_per_epoch == 0: 
+            #     eval_start = time.time()
+            #     epoch_number = int(step / self._config.steps_per_epoch)
+            #     print(f"Finished epoch {epoch_number}. Running validation ...")
+            #     should_render = epoch_number % 10 == 0
+            #     self.evaluate(should_render)
+            #     eval_end = time.time()
+            #     time_eval += eval_end - eval_start
+            #     print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
 
-                print(f"batsh sample: {self._batch_sample_time * 1000:.2}")
-                print(f"tensor convert: {self._tensor_convert_time * 1000:.2}")
-                print(f"actor update: {self._actor_update_time * 1000:.2}")
-                print(f"critic update: {self._critic_update_time * 1000:.2}")
-                print(f"logging: {self._logging_time * 1000:.2}")
-                print(f"target copy: {self._target_compute_time * 1000:.2}")
-                print(f"target compute: {self._target_copy_time * 1000:.2}")
-                print("----------------------------------------------------------")
+            #     print(f"batsh sample: {self._batch_sample_time * 1000:.2}")
+            #     print(f"tensor convert: {self._tensor_convert_time * 1000:.2}")
+            #     print(f"actor update: {self._actor_update_time * 1000:.2}")
+            #     print(f"critic update: {self._critic_update_time * 1000:.2}")
+            #     print(f"logging: {self._logging_time * 1000:.2}")
+            #     print(f"target copy: {self._target_compute_time * 1000:.2}")
+            #     print(f"target compute: {self._target_copy_time * 1000:.2}")
+            #     print("----------------------------------------------------------")
             
         
         self._writer.close()
