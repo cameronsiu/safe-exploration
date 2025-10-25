@@ -46,8 +46,16 @@ class SafetyLayer:
     def _train_mode(self):
         for_each(lambda x: x.train(), self._models)
 
+    def _flatten_dict(self, inp):
+        if type(inp) == dict:
+            inp = np.concatenate(list(inp.values()))
+        return inp
+
     def _initialize_constraint_models(self):
-        self._models = [ConstraintModel(self._env.observation_space["agent_position"].shape[0],
+        observation_dim = (seq(self._env.observation_space.spaces.values())
+                            .map(lambda x: x.shape[0])
+                            .sum())
+        self._models = [ConstraintModel(observation_dim,
                                         self._env.action_space.shape[0]) \
                         for _ in range(self._num_constraints)]
         self._optimizers = [Adam(x.parameters(), lr=self._config.lr) for x in self._models]
@@ -65,7 +73,7 @@ class SafetyLayer:
 
             self._replay_buffer.add({
                 "action": action,
-                "observation": observation["agent_position"],
+                "observation": self._flatten_dict(observation),
                 "c": c,
                 "c_next": c_next 
             })
@@ -127,13 +135,13 @@ class SafetyLayer:
     def get_safe_action(self, observation, action, c):    
         # Find the values of G
         self._eval_mode()
-        g = [x(self._as_tensor(observation["agent_position"]).view(1, -1)) for x in self._models]
+        g = [x(self._as_tensor(self._flatten_dict(observation)).view(1, -1)) for x in self._models]
         self._train_mode()
 
         # Fidn the lagrange multipliers
         g = [x.data.numpy().reshape(-1) for x in g]
-        multipliers = [(np.dot(g_i, action) + c_i) / np.dot(g_i, g_i) for g_i, c_i in zip(g, c)]
-        multipliers = [np.clip(x, 0, np.inf) for x in multipliers]
+        unclipped_multipliers = [(np.dot(g_i, action) + c_i) / np.dot(g_i, g_i) for g_i, c_i in zip(g, c)]
+        multipliers = [np.clip(x, 0, np.inf) for x in unclipped_multipliers]
 
         # Calculate correction
         correction = np.max(multipliers) * g[np.argmax(multipliers)]
