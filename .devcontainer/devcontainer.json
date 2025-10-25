@@ -1,0 +1,33 @@
+{
+  "name": "IsaacSim Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "runArgs": [
+    "--gpus", "all",
+    "--network", "host",
+    "-e", "ACCEPT_EULA=Y",
+    "-e", "PRIVACY_CONSENT=N",
+    "-e", "DISPLAY",
+    "-v", "${env:HOME}/.Xauthority:/isaac-sim/.Xauthority:ro",
+    "-v", "${env:HOME}/docker/isaac-sim/cache/main:/isaac-sim/.cache:rw",
+    "-v", "${env:HOME}/docker/isaac-sim/cache/computecache:/isaac-sim/.nv/ComputeCache:rw",
+    "-v", "${env:HOME}/docker/isaac-sim/logs:/isaac-sim/.nvidia-omniverse/logs:rw",
+    "-v", "${env:HOME}/docker/isaac-sim/config:/isaac-sim/.nvidia-omniverse/config:rw",
+    "-v", "${env:HOME}/docker/isaac-sim/data:/isaac-sim/.local/share/ov/data:rw",
+    "-v", "${env:HOME}/docker/isaac-sim/pkg:/isaac-sim/.local/share/ov/pkg:rw"
+  ],
+  "workspaceFolder": "/isaac-sim/safe-exploration",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/isaac-sim/safe-exploration,type=bind",
+  "remoteUser": "isaac-sim",
+  "updateRemoteUserUID": false,
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash"
+  },
+  "extensions": [
+    "ms-python.python",
+    "ms-vscode.cpptools"
+  ],
+  "postCreateCommand": "echo 'Isaac Sim Devcontainer ready!'"
+}
