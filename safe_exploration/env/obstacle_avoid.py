@@ -206,7 +206,7 @@ class ObstacleAvoid(gym.Env):
         return 1
 
     def get_constraint_values(self):
-        return np.array([self._config.agent_slack - np.max(self._get_lidar_readings())])
+        return np.array([self._config.agent_slack - np.min(self._get_lidar_readings())])
     
     def _get_lidar_readings(self):
         if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
