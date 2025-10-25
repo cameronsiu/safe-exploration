@@ -161,4 +161,4 @@ arguments:
           - name: "task"
             default: "obstacleavoid"
           - name: "use_safety_layer"
-            default: false
+            default: true

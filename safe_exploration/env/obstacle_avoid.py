@@ -22,11 +22,20 @@ class ObstacleAvoid(gym.Env):
         self.observation_space = Dict({
             'agent_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
             'target_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
-            'lidar_readings': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32)
+            'nearest_lidar_distance': Box(low=0, high=1, shape=(1,), dtype=np.float32),
+            'nearest_lidar_direction': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
+            #'lidar_readings': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32)
         })
 
         # Sets all the episode specific variables
         self._obstacles = np.array([
+            # Walls around border
+            [-1, 0, 1, 1],
+            [1, 0, 1, 1],
+            [-1, -1, 3, 1],
+            [-1, 1, 3, 1],
+
+            # Obstacles inside
             [0.0,  0.45, 0.20, 0.1],
             [0.4, 0.45, 0.20, 0.1],
             [0.8, 0.45, 0.20, 0.1]
@@ -144,7 +153,8 @@ class ObstacleAvoid(gym.Env):
 
         self._current_time = 0.
 
-        self._lidar_readings = self._get_lidar_readings()
+        self._lidar_measure_time = -1.0
+        self._lidar_readings = None
 
         return self.step(np.zeros(2))[0]
     
@@ -173,17 +183,15 @@ class ObstacleAvoid(gym.Env):
         self._agent_position += self._config.frequency_ratio * velocity
     
     def _did_agent_collide(self):
-        outside_boundary = np.any(self._agent_position < 0) or np.any(self._agent_position > 1)
         collide_with_obstacle = np.any(self.point_in_boxes(
             self._agent_position,
             self._obstacles
         ))
 
-        return outside_boundary or collide_with_obstacle
+        return collide_with_obstacle
     
     def _is_agent_outside_shaping_boundary(self):
-        return np.any(self._agent_position < self._config.reward_shaping_slack) \
-               or np.any(self._agent_position > 1 - self._config.reward_shaping_slack)
+        return np.any(self._get_lidar_readings() < self._config.reward_shaping_slack)
 
     def _update_time(self):
         # Assume that frequency of motor is 1 (one action per second)
@@ -194,32 +202,21 @@ class ObstacleAvoid(gym.Env):
                np.random.normal(0, self._config.target_noise_std, 2)
     
     def get_num_constraints(self):
-        # a max and a min in x and y
-        return 2 * 2
+        # return self._lidar_directions.shape[0]
+        return 1
 
     def get_constraint_values(self):
-        # For any given n, there will be 2 * n constraints
-        # a lower and upper bound for each dim
-        # We define all the constraints such that C_i = 0
-        # _agent_position > 0 + _agent_slack => -_agent_position + _agent_slack < 0
-        min_constraints = self._config.agent_slack - self._agent_position
-        # _agent_position < 1 - _agent_slack => _agent_position + agent_slack- 1 < 0
-        max_constraint = self._agent_position + self._config.agent_slack - 1
-
-        return np.concatenate([min_constraints, max_constraint])
+        return np.array([self._config.agent_slack - np.max(self._get_lidar_readings())])
     
     def _get_lidar_readings(self):
-        number_of_lidars = self._lidar_directions.shape[0]
-        agent_positions = np.tile(self._agent_position, reps=(number_of_lidars,1))
-        return self.ray_aabb2d_distances(agent_positions, self._lidar_directions, self._obstacles)
-
-        readings = np.ones(8)
-        for lidar_idx in range(self._lidar_directions.shape[0]):
-            lidar_direction = self._lidar_directions[lidar_idx]
-            ray_reading = self.raycast_boxes(self._agent_position, lidar_direction, self._obstacles)
-            readings[lidar_idx] = ray_reading
-
-        return readings
+        if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
+            return self._lidar_readings
+        else:
+            number_of_lidars = self._lidar_directions.shape[0]
+            agent_positions = np.tile(self._agent_position, reps=(number_of_lidars,1))
+            self._lidar_readings = self.ray_aabb2d_distances(agent_positions, self._lidar_directions, self._obstacles)
+            self._lidar_measure_time = self._current_time
+            return self._lidar_readings
 
     def step(self, action):
         # Check if the target needs to be relocated
@@ -234,16 +231,18 @@ class ObstacleAvoid(gym.Env):
         # Calculate new position of the agent
         self._move_agent(action)
 
-        # Find reward         
+        # Find reward
         reward = self._get_reward(initial_position, self._agent_position, action)
 
-        self._lidar_readings = self._get_lidar_readings()
-
+        lidar_readings = self._get_lidar_readings()
+        nearest_lidar = np.argmin(lidar_readings)
         # Prepare return payload
         observation = {
             "agent_position": self._agent_position,
             "target_postion": self._get_noisy_target_position(), # cameron: target position has noise,
-            "lidar_readings": self._lidar_readings
+            "nearest_lidar_distance": lidar_readings[nearest_lidar:nearest_lidar+1],
+            "nearest_lidar_direction": self._lidar_directions[nearest_lidar],
+            #"lidar_readings": self._get_lidar_readings()
         }
 
         done = self._did_agent_collide() \
@@ -296,9 +295,10 @@ class ObstacleAvoid(gym.Env):
                 ),
             )
 
+        lidar_readings = self._get_lidar_readings()
         for lidar_idx in range(self._lidar_directions.shape[0]):
             lidar_dir = self._lidar_directions[lidar_idx]
-            lidar_dist = self._lidar_readings[lidar_idx]
+            lidar_dist = lidar_readings[lidar_idx]
             lidar_point = self._agent_position + lidar_dir * lidar_dist
             lidar_screen_point = lidar_point * self.window_size
 
