@@ -18,22 +18,22 @@ class ObstacleAvoid(gym.Env):
         num_lidars = 16
         self._lidar_directions = self._make_lidar_directions(num_lidars)
 
-        self.action_space = Box(low=-1, high=1, shape=(2,), dtype=np.float32)
+        self.action_space = Box(low=-0.3, high=0.3, shape=(2,), dtype=np.float32)
         self.observation_space = Dict({
             'agent_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
             'target_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
-            'nearest_lidar_distance': Box(low=0, high=1, shape=(1,), dtype=np.float32),
-            'nearest_lidar_direction': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
-            #'lidar_readings': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32)
+            #'nearest_lidar_distance': Box(low=0, high=1, shape=(1,), dtype=np.float32),
+            #'nearest_lidar_direction': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
+            'lidar_readings': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32)
         })
 
         # Sets all the episode specific variables
         self._obstacles = np.array([
             # Walls around border
-            [-1, 0, 1, 1],
-            [1, 0, 1, 1],
-            [-1, -1, 3, 1],
-            [-1, 1, 3, 1],
+            [-1, 0, 1.02, 1],
+            [0.89, 0, 1, 1],
+            [-1, -1, 3, 1.02],
+            [-1, 0.98, 3, 1],
 
             # Obstacles inside
             [0.0,  0.45, 0.20, 0.1],
@@ -240,9 +240,9 @@ class ObstacleAvoid(gym.Env):
         observation = {
             "agent_position": self._agent_position,
             "target_postion": self._get_noisy_target_position(), # cameron: target position has noise,
-            "nearest_lidar_distance": lidar_readings[nearest_lidar:nearest_lidar+1],
-            "nearest_lidar_direction": self._lidar_directions[nearest_lidar],
-            #"lidar_readings": self._get_lidar_readings()
+            #"nearest_lidar_distance": lidar_readings[nearest_lidar:nearest_lidar+1],
+            #"nearest_lidar_direction": self._lidar_directions[nearest_lidar],
+            "lidar_readings": self._get_lidar_readings()
         }
 
         done = self._did_agent_collide() \

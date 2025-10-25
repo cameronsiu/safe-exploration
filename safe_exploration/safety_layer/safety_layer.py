@@ -148,6 +148,10 @@ class SafetyLayer:
 
         action_new = action - correction
 
+        agent_position = observation["agent_position"]
+        if agent_position[0] < 0.1 and agent_position[1] > 0.9:
+            pass
+
         return action_new
 
     def train(self):
