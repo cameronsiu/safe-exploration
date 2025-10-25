@@ -1,7 +1,9 @@
 from functional import seq
+from pathlib import Path
+import glob
+
 import numpy as np
 import torch
-from pathlib import Path
 
 from safe_exploration.core.config import Config
 from safe_exploration.env.ballnd import BallND
@@ -59,15 +61,8 @@ class Trainer:
         else:
             print(f"Critic model file does not exist {self._config.critic_model_file}")
 
-        constraint_model_paths = [Path(constraint_model_file) for constraint_model_file in self._config.constraint_model_files]
-        constraint_model_files = []
-        for constraint_model_file in constraint_model_paths:
-            if constraint_model_file.exists():
-                print(f"Loading constraint model file {constraint_model_file}")
-                constraint_model_files.append(constraint_model_file)
-            else:
-                print(f"Constraint model file does not exist {constraint_model_file} ")
-                constraint_model_files.append(constraint_model_file)
+        constraint_model_files = glob.glob(self._config.constraint_model_files)
+        print(f"Loading constraint model files: {constraint_model_files}")
 
         safety_layer = None
         if self._config.use_safety_layer:

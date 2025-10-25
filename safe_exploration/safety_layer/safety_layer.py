@@ -15,17 +15,15 @@ from safe_exploration.safety_layer.constraint_model import ConstraintModel
 from safe_exploration.utils.list import for_each
 
 class SafetyLayer:
-    def __init__(self, env, constraint_model_files:List[str]=None):
+    def __init__(self, env, constraint_model_files:List[str]):
         self._env = env
-
         self._config = Config.get().safety_layer.trainer
 
         self._num_constraints = env.get_num_constraints()
+        if self._num_constraints != len(constraint_model_files):
+            constraint_model_files = [None]*self._num_constraints
 
-        self._initialize_constraint_models()
-
-        if constraint_model_files is not None:
-            self.load(constraint_model_files)
+        self._initialize_constraint_models(constraint_model_files)
 
         self._replay_buffer = ReplayBuffer(self._config.replay_buffer_size)
 
@@ -51,12 +49,12 @@ class SafetyLayer:
     def _train_mode(self):
         for_each(lambda x: x.train(), self._models)
 
-    def _initialize_constraint_models(self):
+    def _initialize_constraint_models(self, constraint_model_files: List[str]):
         # For ballnd, this is just 2 constraints (min and max x)
         # for spaceship, we have 4 constraints (min_x, max_x, min_y, max_y)
         self._models = [ConstraintModel(self._env.observation_space["agent_position"].shape[0],
-                                        self._env.action_space.shape[0]) \
-                        for _ in range(self._num_constraints)]
+                                        self._env.action_space.shape[0], model_file) \
+                        for model_file in constraint_model_files]
         self._optimizers = [Adam(x.parameters(), lr=self._config.lr) for x in self._models]
 
     def _sample_steps(self, num_steps):
@@ -198,11 +196,4 @@ class SafetyLayer:
 
         for i, model in enumerate(self._models):
             model.save(output_folder, i)
-
-    def load(self, constraint_model_files: str):
-        for model, constraint_model_file in zip(self._models, constraint_model_files):
-            # cameron: add map_location=self._device?
-            # assumes that the list of constraint files will be the same amount of models
-            constraint_state_dict = torch.load(constraint_model_file)
-            model.load_state_dict(constraint_state_dict)
 
