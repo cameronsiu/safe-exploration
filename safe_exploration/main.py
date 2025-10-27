@@ -80,7 +80,9 @@ class Trainer:
         else:
             print(f"Critic model file does not exist {self._config.critic_model_file}")
 
-        observation_dim = 2  # relative position only (dx, dy)
+        observation_dim = (seq(env.observation_space.spaces.values())
+                            .map(lambda x: x.shape[0])
+                            .sum())
         actor = Actor(observation_dim, env.action_space.shape[0], actor_model_file)
         critic = Critic(observation_dim, env.action_space.shape[0], critic_model_file)
 

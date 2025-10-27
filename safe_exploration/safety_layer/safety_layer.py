@@ -53,7 +53,7 @@ class SafetyLayer:
 
     def _flatten_dict(self, inp):
         if type(inp) == dict:
-            inp = np.concatenate(list(inp.values()))        
+            inp = np.concatenate(list(inp.values()))
         return inp
 
     def _initialize_constraint_models(self, constraint_model_files: List[str]):
@@ -73,7 +73,6 @@ class SafetyLayer:
 
         for step in range(num_steps):            
             action = self._env.action_space.sample()
-                
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action)
             c_next = self._env.get_constraint_values()
@@ -160,7 +159,7 @@ class SafetyLayer:
 
         return action_new
 
-    def train(self, output_folder: str):
+    def train(self, output_folder:str):
 
         start_time = time.time()
 
@@ -195,13 +194,13 @@ class SafetyLayer:
                     .map(lambda x: (f"{x[0]}_{x[1][0]}", x[1][1])) # (modified_param_name, param_data)
                     .for_each(lambda x: self._writer.add_histogram(x[0], x[1].data.numpy(), self._train_global_step)))
 
+
+
             self._train_global_step += 1
 
             print(f"Finished epoch {epoch} with losses: {losses}. Running validation ...")
             self.evaluate()
             print("----------------------------------------------------------")
-
-
 
         self._writer.close()
         print("==========================================================")
