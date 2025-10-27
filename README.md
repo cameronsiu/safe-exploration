@@ -23,9 +23,10 @@ By default, this command will train by default. Make sure to double check the `d
 python3 -m safe_exploration.main
 ```
 
-You will see a folder to run
+The terminal will print the directory for the tensorboard,
+i.e.
 ```
-tensorboard --logdir=runs/Oct25_12-30-28_cameronsiu-ubuntu24
+tensorboard --logdir=runs/{FOLDER IN RUNS}
 ```
 
 ## Testing

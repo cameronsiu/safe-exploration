@@ -174,4 +174,8 @@ arguments:
             default: false
           - name: "safety_layer_only"
             default: false
+          - name: "render_training"
+            default: false
+          - name: "render_evaluation"
+            default: false
 

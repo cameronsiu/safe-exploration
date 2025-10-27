@@ -267,9 +267,9 @@ class DDPG:
         print(f"Training DDPG for {number_of_steps}")
         print(self._writer.logdir)
 
-        self._violation_count = 0
-        self._violation_total = 0
-        self._violations_per_episode = []
+        violation_count = 0
+        violation_total = 0
+        violations_per_episode = []
 
         time_simulating = 0
         time_training = 0
@@ -288,10 +288,6 @@ class DDPG:
                     print("Safety layer is now on")
                     safety_layer_print = False
                 action = self._get_action(observation, c)
-
-            if step % 1000 == 0:
-                rel_pos = self._flatten_dict(observation)
-                print(f"Step {step} | Relative position: {rel_pos} | Action: {action}")
             
             observation_next, reward, done, _ = self._env.step(action)
 
@@ -303,9 +299,9 @@ class DDPG:
 
             c = self._env.get_constraint_values()
             violated = np.any(c > 0)
-            self._violation_total += 1
+            violation_total += 1
             if violated:
-                self._violation_count += 1
+                violation_count += 1
 
             self._replay_buffer.add({
                 "observation": self._flatten_dict(observation),
@@ -327,20 +323,23 @@ class DDPG:
                     step_trained_on = step
                     update_end = time.time()
                     time_training += update_end - update_start
+
+                # Log metrics
+                self._writer.add_scalar("episode length", episode_length)
+                self._writer.add_scalar("episode reward", episode_reward)
+
+                violation_rate = violation_count / (violation_total + 1e-8)
+                self._writer.add_scalar("safety/violation_rate", violation_rate, self._train_global_step)
+                violations_per_episode.append(violation_count)
+                print(f"Episode {self._train_global_step}: violation_rate={violation_rate:.3f}")
+                
                 # Reset episode
                 observation = self._env.reset()
                 c = self._env.get_constraint_values()
                 episode_reward = 0
                 episode_length = 0
-                self._writer.add_scalar("episode length", episode_length)
-                self._writer.add_scalar("episode reward", episode_reward)
-                
-                violation_rate = self._violation_count / (self._violation_total + 1e-8)
-                self._writer.add_scalar("safety/violation_rate", violation_rate, self._train_global_step)
-                print(f"Episode {self._train_global_step}: violation_rate={violation_rate:.3f}")
-                self._violations_per_episode.append(self._violation_count)
-                self._violation_count = 0
-                self._violation_total = 0
+                violation_count = 0
+                violation_total = 0
 
             # Check if the epoch is over
             if step != 0 and step % self._config.steps_per_epoch == 0: 

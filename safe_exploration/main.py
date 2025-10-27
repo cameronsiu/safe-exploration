@@ -85,12 +85,12 @@ class Trainer:
         critic = Critic(observation_dim, env.action_space.shape[0], critic_model_file)
 
         safe_action_func = safety_layer.get_safe_action if safety_layer else None
-        ddpg = DDPG(env, actor, critic, safe_action_func, render_training=True, render_evaluation=True)
+        ddpg = DDPG(env, actor, critic, safe_action_func, render_training=self._config.render_training, render_evaluation=self._config.render_evaluation)
         
         if not self._config.test:
             ddpg.train(self._config.output_folder)
         else:
-            ddpg.evaluate()
+            ddpg.evaluate(self._config.render_evaluation)
 
 
 if __name__ == '__main__':
