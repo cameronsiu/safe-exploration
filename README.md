@@ -23,6 +23,11 @@ By default, this command will train by default. Make sure to double check the `d
 python3 -m safe_exploration.main
 ```
 
+You will see a folder to run
+```
+tensorboard --logdir=runs/Oct25_12-30-28_cameronsiu-ubuntu24
+```
+
 ## Testing
 ```
 python3 -m safe_exploration.main --main_trainer_test

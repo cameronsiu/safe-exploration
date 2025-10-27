@@ -172,4 +172,6 @@ arguments:
             default: "./output/constraint_*.pt"
           - name: "test"
             default: false
+          - name: "safety_layer_only"
+            default: false
 

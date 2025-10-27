@@ -46,6 +46,22 @@ class Trainer:
         env = BallND() if self._config.task == "ballnd" else \
             ObstacleAvoid() if self._config.task == "obstacleavoid" else \
             Spaceship()
+        
+        constraint_model_files = glob.glob(self._config.constraint_model_files)
+        print(f"Loading constraint model files: {constraint_model_files}")
+
+        if self._config.use_safety_layer:
+            safety_layer = SafetyLayer(env, constraint_model_files, render=False)
+            
+            if not self._config.test:
+                safety_layer.train(self._config.output_folder)
+            else:
+                safety_layer.evaluate()
+        else:
+            safety_layer = None
+
+        if self._config.safety_layer_only:
+            return
 
         actor_file = Path(self._config.actor_model_file)
         critic_file = Path(self._config.critic_model_file)
@@ -64,24 +80,7 @@ class Trainer:
         else:
             print(f"Critic model file does not exist {self._config.critic_model_file}")
 
-        constraint_model_files = glob.glob(self._config.constraint_model_files)
-        print(f"Loading constraint model files: {constraint_model_files}")
-
-        safety_layer = None
-        if self._config.use_safety_layer:
-            safety_layer = SafetyLayer(env, constraint_model_files, render=False)
-            
-            if not self._config.test:
-                safety_layer.train(self._config.output_folder)
-            else:
-                safety_layer.evaluate()
-        else:
-            safety_layer = None
-
-        obs_spaces = env.observation_space.spaces
-        relevant_keys = ["agent_position", "target_position"]
-        observation_dim = sum(obs_spaces[k].shape[0] for k in relevant_keys)
-
+        observation_dim = 2  # relative position only (dx, dy)
         actor = Actor(observation_dim, env.action_space.shape[0], actor_model_file)
         critic = Critic(observation_dim, env.action_space.shape[0], critic_model_file)
 

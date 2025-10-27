@@ -121,7 +121,11 @@ class DDPG:
         if type(inp) == dict:
             agent_position = inp["agent_position"]
             target_position = inp["target_position"]
-            inp = np.concatenate([agent_position, target_position])
+            relative_position = target_position - agent_position
+            # Normalizing position
+            #relative_position = np.clip(target_position - agent_position, -1.0, 1.0)
+            #relative_position = (target_position - agent_position) / np.sqrt(2)
+            inp = relative_position
         return inp
 
     def _update_targets(self, target, main):
@@ -260,6 +264,13 @@ class DDPG:
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
+        print(f"Training DDPG for {number_of_steps}")
+        print(self._writer.logdir)
+
+        self._violation_count = 0
+        self._violation_total = 0
+        self._violations_per_episode = []
+
         time_simulating = 0
         time_training = 0
         time_eval = 0
@@ -268,8 +279,8 @@ class DDPG:
 
         for step in range(number_of_steps):
             sim_start = time.time()
+
             # Randomly sample episode_ for some initial steps
-            
             if step < self._config.start_steps:
                 action = self._env.action_space.sample()
             else:
@@ -277,6 +288,10 @@ class DDPG:
                     print("Safety layer is now on")
                     safety_layer_print = False
                 action = self._get_action(observation, c)
+
+            if step % 1000 == 0:
+                rel_pos = self._flatten_dict(observation)
+                print(f"Step {step} | Relative position: {rel_pos} | Action: {action}")
             
             observation_next, reward, done, _ = self._env.step(action)
 
@@ -285,6 +300,12 @@ class DDPG:
                 
             episode_reward += reward
             episode_length += 1
+
+            c = self._env.get_constraint_values()
+            violated = np.any(c > 0)
+            self._violation_total += 1
+            if violated:
+                self._violation_count += 1
 
             self._replay_buffer.add({
                 "observation": self._flatten_dict(observation),
@@ -295,7 +316,6 @@ class DDPG:
             })
 
             observation = observation_next
-            c = self._env.get_constraint_values()
             sim_end = time.time()
             time_simulating += sim_end - sim_start
 
@@ -314,26 +334,39 @@ class DDPG:
                 episode_length = 0
                 self._writer.add_scalar("episode length", episode_length)
                 self._writer.add_scalar("episode reward", episode_reward)
+                
+                violation_rate = self._violation_count / (self._violation_total + 1e-8)
+                self._writer.add_scalar("safety/violation_rate", violation_rate, self._train_global_step)
+                print(f"Episode {self._train_global_step}: violation_rate={violation_rate:.3f}")
+                self._violations_per_episode.append(self._violation_count)
+                self._violation_count = 0
+                self._violation_total = 0
 
             # Check if the epoch is over
-            # if step != 0 and step % self._config.steps_per_epoch == 0: 
-            #     eval_start = time.time()
-            #     epoch_number = int(step / self._config.steps_per_epoch)
-            #     print(f"Finished epoch {epoch_number}. Running validation ...")
-            #     should_render = epoch_number % 10 == 0
-            #     self.evaluate(should_render)
-            #     eval_end = time.time()
-            #     time_eval += eval_end - eval_start
-            #     print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
+            if step != 0 and step % self._config.steps_per_epoch == 0: 
+                eval_start = time.time()
+                epoch_number = int(step / self._config.steps_per_epoch)
+                print(f"Finished epoch {epoch_number}. Running validation ...")
+                should_render = epoch_number % 10 == 0
+                self.evaluate(should_render)
+                eval_end = time.time()
+                time_eval += eval_end - eval_start
+                print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
 
-            #     print(f"batsh sample: {self._batch_sample_time * 1000:.2}")
-            #     print(f"tensor convert: {self._tensor_convert_time * 1000:.2}")
-            #     print(f"actor update: {self._actor_update_time * 1000:.2}")
-            #     print(f"critic update: {self._critic_update_time * 1000:.2}")
-            #     print(f"logging: {self._logging_time * 1000:.2}")
-            #     print(f"target copy: {self._target_compute_time * 1000:.2}")
-            #     print(f"target compute: {self._target_copy_time * 1000:.2}")
-            #     print("----------------------------------------------------------")
+                print(f"batsh sample: {self._batch_sample_time * 1000:.2}")
+                print(f"tensor convert: {self._tensor_convert_time * 1000:.2}")
+                print(f"actor update: {self._actor_update_time * 1000:.2}")
+                print(f"critic update: {self._critic_update_time * 1000:.2}")
+                print(f"logging: {self._logging_time * 1000:.2}")
+                print(f"target copy: {self._target_compute_time * 1000:.2}")
+                print(f"target compute: {self._target_copy_time * 1000:.2}")
+                print("----------------------------------------------------------")
+
+            debug = getattr(self._env, "_last_debug", None)
+            if debug is not None:
+                for k, v in debug.items():
+                    #print(k,v)
+                    self._writer.add_scalar(f"reward/{k}", v, step)
             
         
         self._writer.close()

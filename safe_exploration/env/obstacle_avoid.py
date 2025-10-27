@@ -162,36 +162,60 @@ class ObstacleAvoid(gym.Env):
         agent_on_top = self._agent_position[1] > 0.5
         target_position = np.random.random(2)
 
-        if agent_on_top:
-            self._target_position = np.array([0, 0]) + target_position * np.array([1, 0.25])
-        else:
-            self._target_position = np.array([0, 1]) + target_position * np.array([1, -0.25])
+        while True:
+            target_position = np.random.random(2)
+            if agent_on_top:
+                target = np.array([0, 0]) + target_position * np.array([1, 0.25])
+            else:
+                target = np.array([0, 1]) + target_position * np.array([1, -0.25])
+
+            # Check it's not inside an obstacle or wall
+            if not np.any(self.point_in_boxes(target, self._obstacles)):
+                self._target_position = target
+                break
     
     def _get_reward(self, initial_position, final_position, action):
         if self._config.enable_reward_shaping and self._is_agent_outside_shaping_boundary():
             return -1
         
-        # 2. Compute progress term
-        sq_initial_distance = (1 - LA.norm(initial_position - self._target_position)) ** 2
-        sq_final_distance = (1 - LA.norm(final_position - self._target_position)) ** 2
-        distance_change = sq_final_distance - sq_initial_distance
+        # Distance-based progress
+        dist_initial = LA.norm(initial_position - self._target_position)
+        dist_final = LA.norm(final_position - self._target_position)
+        progress = dist_initial - dist_final  # positive if moved closer
 
-        # 3. Absolute proximity reward (for staying close)
-        proximity = 1 - LA.norm(final_position - self._target_position)
+        # Directional alignment
+        to_target = self._target_position - initial_position
+        to_target /= (np.linalg.norm(to_target) + 1e-8)
+        movement = final_position - initial_position
+        movement /= (np.linalg.norm(movement) + 1e-8)
+        alignment = np.dot(to_target, movement)
 
-        # 4. Step cost (discourages wasting time)
+        # Proximity and penalties
+        proximity = 1 - dist_final
+        action_penalty = np.linalg.norm(action)
+        wall_penalty = np.exp(-5.0 * np.min(self._get_lidar_readings()))
         time_penalty = 0.01
 
-        # 5. Small penalty for jerky motion or high speed
-        action_penalty = 0.1 * np.linalg.norm(action)
+        # Combine
+        reward = (
+            10.0 * progress        # main progress signal
+            + 0.2 * alignment      # directional shaping
+            + 0.1 * proximity      # encourage closeness
+            - 0.05 * action_penalty
+            - 0.1 * wall_penalty
+            - time_penalty
+        )
 
-        # 6. Combine terms
-        reward = distance_change + 0.1 * proximity - time_penalty - action_penalty
-
-        # 7. Optional success bonus
-        if LA.norm(final_position - self._target_position) < 0.05:
+        if dist_final < 0.05:
             reward += 10.0
 
+        self._last_debug = dict(
+            progress=progress,
+            alignment=alignment,
+            proximity=proximity,
+            wall_penalty=wall_penalty,
+            reward=reward,
+        )
         return reward
     
     def _move_agent(self, velocity):
@@ -218,12 +242,12 @@ class ObstacleAvoid(gym.Env):
                np.random.normal(0, self._config.target_noise_std, 2)
     
     def get_num_constraints(self):
-        return self._lidar_directions.shape[0]
-        # return 1
+        # return self._lidar_directions.shape[0]
+        return 1
 
     def get_constraint_values(self):
-        return self._config.agent_slack - self._get_lidar_readings()
-        # return np.array([self._config.agent_slack - np.min(self._get_lidar_readings())])
+        # return self._config.agent_slack - self._get_lidar_readings()
+        return np.array([self._config.agent_slack - np.min(self._get_lidar_readings())])
     
     def _get_lidar_readings(self):
         if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
