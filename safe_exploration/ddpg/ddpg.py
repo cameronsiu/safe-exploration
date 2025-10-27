@@ -263,7 +263,6 @@ class DDPG:
 
         violation_count = 0
         violation_total = 0
-        violations_per_episode = []
 
         time_simulating = 0
         time_training = 0
@@ -318,14 +317,11 @@ class DDPG:
                     time_training += update_end - update_start
 
                 # Log metrics
-                self._writer.add_scalar("episode length", episode_length)
-                self._writer.add_scalar("episode reward", episode_reward)
+                self._writer.add_scalar("episode length", episode_length, self._train_global_step)
+                self._writer.add_scalar("episode reward", episode_reward, self._train_global_step)
 
                 violation_rate = violation_count / (violation_total + 1e-8)
                 self._writer.add_scalar("safety/violation_rate", violation_rate, self._train_global_step)
-                violations_per_episode.append(violation_count)
-                print(f"Episode {self._train_global_step}: violation_rate={violation_rate:.3f}")
-                
                 # Reset episode
                 observation = self._env.reset()
                 c = self._env.get_constraint_values()
