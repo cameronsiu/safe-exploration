@@ -53,16 +53,13 @@ class SafetyLayer:
 
     def _flatten_dict(self, inp):
         if type(inp) == dict:
-            #agent_position = inp["agent_position"]
-            lidar_readings = inp["lidar_readings"]
-            inp = np.concatenate([lidar_readings])
+            inp = np.concatenate(list(inp.values()))        
         return inp
 
     def _initialize_constraint_models(self, constraint_model_files: List[str]):
-        obs_spaces = self._env.observation_space.spaces
-        #relevant_keys = ["agent_position", "lidar_readings"]
-        relevant_keys = ["lidar_readings"]
-        observation_dim = sum(obs_spaces[k].shape[0] for k in relevant_keys)
+        observation_dim = (seq(self._env.observation_space.spaces.values())
+                    .map(lambda x: x.shape[0])
+                    .sum())
         self._models = [ConstraintModel(observation_dim,
                                         self._env.action_space.shape[0], model_file) \
                         for model_file in constraint_model_files]
@@ -74,22 +71,8 @@ class SafetyLayer:
 
         observation = self._env.reset()
 
-        for step in range(num_steps):
-            lidar_readings = observation["lidar_readings"]
-            r = np.random.rand()
-            if r < 0.3:
-                # Random action anywhere (exploration)
-                action = self._env.action_space.sample()
-            elif r < 0.7:
-                # Push toward nearest obstacle (learn boundary gradients)
-                idx = np.argmin(lidar_readings)
-                push_dir = -self._env._lidar_directions[idx]  # toward obstacle
-                action = 0.2 * push_dir + 0.05 * np.random.randn(2)
-            else:
-                # Push away from nearest obstacle (learn recovery)
-                idx = np.argmin(lidar_readings)
-                push_dir = self._env._lidar_directions[idx]  # away from obstacle
-                action = 0.2 * push_dir + 0.05 * np.random.randn(2)
+        for step in range(num_steps):            
+            action = self._env.action_space.sample()
                 
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action)
@@ -217,7 +200,9 @@ class SafetyLayer:
             print(f"Finished epoch {epoch} with losses: {losses}. Running validation ...")
             self.evaluate()
             print("----------------------------------------------------------")
-        
+
+
+
         self._writer.close()
         print("==========================================================")
         print(f"Finished training constraint model. Time spent: {(time.time() - start_time) // 1} secs")

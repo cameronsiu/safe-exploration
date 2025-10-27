@@ -273,7 +273,6 @@ class DDPG:
 
         for step in range(number_of_steps):
             sim_start = time.time()
-
             # Randomly sample episode_ for some initial steps
             if step < self._config.start_steps:
                 action = self._env.action_space.sample()
@@ -282,11 +281,11 @@ class DDPG:
                     print("Safety layer is now on")
                     safety_layer_print = False
                 action = self._get_action(observation, c)
-            
-            observation_next, reward, done, _ = self._env.step(action)
 
             if self._render_training:
                 self._env.render_env()
+
+            observation_next, reward, done, _ = self._env.step(action)
                 
             episode_reward += reward
             episode_length += 1
@@ -354,12 +353,6 @@ class DDPG:
                 print(f"target copy: {self._target_compute_time * 1000:.2}")
                 print(f"target compute: {self._target_copy_time * 1000:.2}")
                 print("----------------------------------------------------------")
-
-            debug = getattr(self._env, "_last_debug", None)
-            if debug is not None:
-                for k, v in debug.items():
-                    #print(k,v)
-                    self._writer.add_scalar(f"reward/{k}", v, step)
             
         
         self._writer.close()
