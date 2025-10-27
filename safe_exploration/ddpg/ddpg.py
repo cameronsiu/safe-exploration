@@ -119,13 +119,7 @@ class DDPG:
 
     def _flatten_dict(self, inp):
         if type(inp) == dict:
-            agent_position = inp["agent_position"]
-            target_position = inp["target_position"]
-            relative_position = target_position - agent_position
-            # Normalizing position
-            #relative_position = np.clip(target_position - agent_position, -1.0, 1.0)
-            #relative_position = (target_position - agent_position) / np.sqrt(2)
-            inp = relative_position
+            inp = np.concatenate(list(inp.values()))
         return inp
 
     def _update_targets(self, target, main):
@@ -297,12 +291,6 @@ class DDPG:
             episode_reward += reward
             episode_length += 1
 
-            c = self._env.get_constraint_values()
-            violated = np.any(c > 0)
-            violation_total += 1
-            if violated:
-                violation_count += 1
-
             self._replay_buffer.add({
                 "observation": self._flatten_dict(observation),
                 "action": action,
@@ -312,8 +300,14 @@ class DDPG:
             })
 
             observation = observation_next
+            c = self._env.get_constraint_values()
             sim_end = time.time()
             time_simulating += sim_end - sim_start
+
+            violated = np.any(c > 0)
+            violation_total += 1
+            if violated:
+                violation_count += 1
 
             # Make all updates at the end of the episode
             if done or (episode_length == self._config.max_episode_length):

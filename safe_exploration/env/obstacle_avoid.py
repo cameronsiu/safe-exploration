@@ -31,7 +31,7 @@ class ObstacleAvoid(gym.Env):
         self._obstacles = np.array([
             # Walls around border
             [-1, 0, 1.02, 1],
-            [0.89, 0, 1, 1],
+            [0.98, 0, 1, 1],
             [-1, -1, 3, 1.02],
             [-1, 0.98, 3, 1],
 
