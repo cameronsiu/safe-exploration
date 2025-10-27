@@ -120,20 +120,10 @@ class SafetyLayer:
         
         gs = [x(observation) for x in self._models]
 
-        # c_next_predicted = [c[:, i] + \
-        #                     torch.bmm(x.view(x.shape[0], 1, -1), action.view(action.shape[0], -1, 1)).view(-1) \
-        #                     for i, x in enumerate(gs)]
-        #losses = [torch.mean((c_next[:, i] - c_next_predicted[i]) ** 2) for i in range(self._num_constraints)]
-        
-        losses = []
-        for i, g_i in enumerate(gs):
-            pred = c[:, i] + torch.bmm(g_i.view(g_i.shape[0], 1, -1), action.view(action.shape[0], -1, 1)).view(-1)
-            err = (c_next[:, i] - pred) ** 2
-
-            # emphasize near-boundary examples
-            weights = torch.exp(-5.0 * torch.abs(c[:, i]))
-            loss = torch.mean(weights * err)
-            losses.append(loss)
+        c_next_predicted = [c[:, i] + \
+                            torch.bmm(x.view(x.shape[0], 1, -1), action.view(action.shape[0], -1, 1)).view(-1) \
+                            for i, x in enumerate(gs)]
+        losses = [torch.mean((c_next[:, i] - c_next_predicted[i]) ** 2) for i in range(self._num_constraints)]
 
         return losses
 
@@ -197,7 +187,7 @@ class SafetyLayer:
         print(f"Start time: {datetime.fromtimestamp(start_time)}")
         print("==========================================================")
 
-        print(self._writer.logdir)
+        print(f"Safety Layer Tensorboard folder: {self._writer.logdir}")
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 

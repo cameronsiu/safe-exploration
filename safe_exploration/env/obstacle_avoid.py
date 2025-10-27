@@ -22,8 +22,8 @@ class ObstacleAvoid(gym.Env):
         self.observation_space = Dict({
             'agent_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
             'target_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
-            # 'nearest_lidar_distance': Box(low=0, high=1, shape=(1,), dtype=np.float32),
-            # 'nearest_lidar_direction': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
+            #'nearest_lidar_distance': Box(low=0, high=1, shape=(1,), dtype=np.float32),
+            #'nearest_lidar_direction': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
             'lidar_readings': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32)
         })
 
@@ -280,7 +280,7 @@ class ObstacleAvoid(gym.Env):
         # Prepare return payload
         observation = {
             "agent_position": self._agent_position,
-            "target_position": self._get_noisy_target_position(), # cameron: target position has noise,
+            "target_position": self._get_noisy_target_position(),
             #"nearest_lidar_distance": lidar_readings[nearest_lidar:nearest_lidar+1],
             #"nearest_lidar_direction": self._lidar_directions[nearest_lidar],
             "lidar_readings": self._get_lidar_readings()

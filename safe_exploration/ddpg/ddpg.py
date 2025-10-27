@@ -265,7 +265,7 @@ class DDPG:
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
         print(f"Training DDPG for {number_of_steps}")
-        print(self._writer.logdir)
+        print(f"DDPG Tensorboard folder: {self._writer.logdir}")
 
         violation_count = 0
         violation_total = 0
