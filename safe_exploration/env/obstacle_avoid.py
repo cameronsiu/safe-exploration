@@ -5,6 +5,7 @@ from numpy import linalg as LA
 import pygame
 import time
 
+import torch
 from safe_exploration.core.config import Config
 
 
@@ -47,6 +48,10 @@ class ObstacleAvoid(gym.Env):
         self.window = None
         self.clock = None
         self.window_size = 1024
+
+        self.sigmoid = torch.nn.Sigmoid()
+        self.min_lidar_distance = 0.2
+        self.sigmoid_scale = 2.0
 
     def _make_lidar_directions(self, number_of_rays):
         lidar_directions = np.zeros((number_of_rays, 2))
@@ -161,18 +166,22 @@ class ObstacleAvoid(gym.Env):
     def _reset_target_location(self):
         agent_on_top = self._agent_position[1] > 0.5
         target_position = np.random.random(2)
+        if agent_on_top:
+            self._target_position = np.array([0, 0]) + target_position * np.array([1, 0.25])
+        else:
+            self._target_position = np.array([0, 1]) + target_position * np.array([1, -0.25])
 
-        while True:
-            target_position = np.random.random(2)
-            if agent_on_top:
-                target = np.array([0, 0]) + target_position * np.array([1, 0.25])
-            else:
-                target = np.array([0, 1]) + target_position * np.array([1, -0.25])
+        # while True:
+        #     target_position = np.random.random(2)
+        #     if agent_on_top:
+        #         target = np.array([0, 0]) + target_position * np.array([1, 0.25])
+        #     else:
+        #         target = np.array([0, 1]) + target_position * np.array([1, -0.25])
 
-            # Check it's not inside an obstacle or wall
-            if not np.any(self.point_in_boxes(target, self._obstacles)):
-                self._target_position = target
-                break
+        #     # Check it's not inside an obstacle or wall
+        #     if not np.any(self.point_in_boxes(target, self._obstacles)):
+        #         self._target_position = target
+        #         break
     
     def _get_reward(self, initial_position, final_position, action):
         if self._config.enable_reward_shaping and self._is_agent_outside_shaping_boundary():
@@ -208,11 +217,10 @@ class ObstacleAvoid(gym.Env):
     
     def get_num_constraints(self):
         return self._lidar_directions.shape[0]
-        # return 1
 
     def get_constraint_values(self):
-        return self._config.agent_slack - self._get_lidar_readings()
-        # return np.array([self._config.agent_slack - np.min(self._get_lidar_readings())])
+        lidar_readings = self._config.agent_slack - np.minimum(self._get_lidar_readings(), 0.2)
+        return lidar_readings
     
     def _get_lidar_readings(self):
         if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:

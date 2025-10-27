@@ -281,8 +281,8 @@ class DDPG:
                     safety_layer_print = False
                 action = self._get_action(observation, c)
 
-            if self._render_training:
-                self._env.render_env()
+                if self._render_training:
+                    self._env.render_env()
 
             observation_next, reward, done, _ = self._env.step(action)
                 
@@ -305,6 +305,9 @@ class DDPG:
             violated = np.any(c > 0)
             violation_total += 1
             if violated:
+                if step >= self._config.start_steps:
+                    print(f"###### Constraint violated!")
+                    print(f"{observation} {action} {observation_next}")
                 violation_count += 1
 
             # Make all updates at the end of the episode

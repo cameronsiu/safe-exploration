@@ -99,7 +99,7 @@ class SafetyLayer:
         action = self._as_tensor(batch["action"])
         c = self._as_tensor(batch["c"])
         c_next = self._as_tensor(batch["c_next"])
-        
+
         gs = [x(observation) for x in self._models]
 
         c_next_predicted = [c[:, i] + \
@@ -153,10 +153,15 @@ class SafetyLayer:
         multipliers = [np.clip(x, 0, np.inf) for x in unclipped_multipliers]
 
         # Calculate correction
-        correction = np.max(multipliers) * g[np.argmax(multipliers)]
+        # correction = np.max(multipliers) * g[np.argmax(multipliers)]
 
-        action_new = action - correction
+        # action_new = action - correction
 
+        action_new = np.zeros((action.shape[0], len(multipliers)))
+        for i, multiplier in enumerate(multipliers):
+            correction = multiplier * g[i]
+            action_new[:, i] = action - correction
+        action_new = np.min(action_new, axis=1)
         return action_new
 
     def train(self, output_folder:str):

@@ -9,15 +9,13 @@ class ConstraintModel(Net):
     def __init__(self, observation_dim, action_dim, model_file:str=None):
         config = Config.get().safety_layer.constraint_model
         
-        sigmoid = torch.nn.Sigmoid()
-
         super(ConstraintModel, self)\
             .__init__(observation_dim,
                       action_dim,
                       config.layers,
                       config.init_bound,
                       uniform_,
-                      sigmoid)
+                      None)
 
         if model_file is not None:
             state_dict = torch.load(model_file)
