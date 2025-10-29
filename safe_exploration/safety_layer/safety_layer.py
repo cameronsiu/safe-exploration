@@ -23,6 +23,9 @@ class SafetyLayer:
         if self._num_constraints != len(constraint_model_files):
             constraint_model_files = [None]*self._num_constraints
 
+        #self._features = ["lidar_readings_x", "lidar_readings_y"]
+        self._features = ["lidar_readings"]
+
         self._initialize_constraint_models(constraint_model_files)
 
         self._replay_buffer = ReplayBuffer(self._config.replay_buffer_size)
@@ -53,13 +56,17 @@ class SafetyLayer:
 
     def _flatten_dict(self, inp):
         if type(inp) == dict:
-            inp = np.concatenate(list(inp.values()))
+            inp = np.concatenate(list([inp[key] for key in sorted(inp.keys())]))
         return inp
 
     def _initialize_constraint_models(self, constraint_model_files: List[str]):
-        observation_dim = (seq(self._env.observation_space.spaces.values())
-                    .map(lambda x: x.shape[0])
-                    .sum())
+        feature_dict = {
+            feature: self._env.observation_space.spaces[feature] for feature in self._features
+        }
+        observation_dim = (seq(feature_dict.values())
+                            .map(lambda x: x.shape[0])
+                            .sum())
+        #observation_dim = 1
         self._models = [ConstraintModel(observation_dim,
                                         self._env.action_space.shape[0], model_file) \
                         for model_file in constraint_model_files]
@@ -82,7 +89,9 @@ class SafetyLayer:
 
             self._replay_buffer.add({
                 "action": action,
-                "observation": self._flatten_dict(observation),
+                "observation": self._flatten_dict({
+                    feature: observation[feature] for feature in self._features
+                }),
                 "c": c,
                 "c_next": c_next 
             })
@@ -99,8 +108,8 @@ class SafetyLayer:
         action = self._as_tensor(batch["action"])
         c = self._as_tensor(batch["c"])
         c_next = self._as_tensor(batch["c_next"])
-
-        gs = [x(observation) for x in self._models]
+        
+        gs = [x(observation) for i, x in enumerate(self._models)]
 
         c_next_predicted = [c[:, i] + \
                             torch.bmm(x.view(x.shape[0], 1, -1), action.view(action.shape[0], -1, 1)).view(-1) \
@@ -144,25 +153,38 @@ class SafetyLayer:
     def get_safe_action(self, observation, action, c):    
         # Find the values of G
         self._eval_mode()
-        g = [x(self._as_tensor(self._flatten_dict(observation)).view(1, -1)) for x in self._models]
+        o = self._as_tensor(self._flatten_dict({
+            feature: observation[feature] for feature in self._features
+        })).view(1, -1)
+        #g = [x(o[:, i:i+1]) for i, x in enumerate(self._models)]
+        g = [x(o) for i, x in enumerate(self._models)]
         self._train_mode()
 
         # Find the lagrange multipliers
         g = [x.data.numpy().reshape(-1) for x in g]
+
+        #g = [
+        #    np.array([0.1, 0]),
+        #    np.array([0, 0.1]),
+        #    np.array([-0.1, 0]),
+        #    np.array([0, -0.1]),
+        #]
+
         unclipped_multipliers = [(np.dot(g_i, action) + c_i) / np.dot(g_i, g_i) for g_i, c_i in zip(g, c)]
         multipliers = [np.clip(x, 0, np.inf) for x in unclipped_multipliers]
 
         # Calculate correction
         # correction = np.max(multipliers) * g[np.argmax(multipliers)]
 
-        # action_new = action - correction
+        action_new = action - correction
 
-        action_new = np.zeros((action.shape[0], len(multipliers)))
-        for i, multiplier in enumerate(multipliers):
-            correction = multiplier * g[i]
-            action_new[:, i] = action - correction
-        action_new = np.min(action_new, axis=1)
-        return action_new
+        action_clipped = np.clip(action_new, -1, 1)
+
+        agent_position = observation["agent_position"]
+        if agent_position[0] < 0.1 or agent_position[1] > 0.9:
+            pass
+
+        return action_clipped
 
     def train(self, output_folder:str):
 

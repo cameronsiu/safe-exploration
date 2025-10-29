@@ -119,7 +119,7 @@ class DDPG:
 
     def _flatten_dict(self, inp):
         if type(inp) == dict:
-            inp = np.concatenate(list(inp.values()))
+            inp = np.concatenate(list([inp[key] for key in sorted(inp.keys())]))
         return inp
 
     def _update_targets(self, target, main):
