@@ -182,7 +182,7 @@ class ObstacleAvoid(gym.Env):
     
     def _move_agent(self, velocity):
         # Assume that frequency of motor is 1 (one action per second)
-        self._agent_position += self._config.frequency_ratio * velocity
+        self._agent_position = self._agent_position + self._config.frequency_ratio * velocity
     
     def _did_agent_collide(self):
         collide_with_obstacle = np.any(self.point_in_boxes(
