@@ -73,7 +73,7 @@ class SafetyLayer:
 
         self._optimizers = [Adam(x.parameters(), lr=self._config.lr) for x in self._models]
 
-    def _sample_steps(self, num_steps, save_data):
+    def _sample_steps(self, num_steps, save_data=None):
         episode_length = 0
 
         observation = self._env.reset()
@@ -90,19 +90,22 @@ class SafetyLayer:
             if self._render:
                 self._env.render_env()
 
-            observations = self._flatten_dict({
-                feature: observation[feature] for feature in self._features
-            }),
             self._replay_buffer.add({
                 "action": action,
-                "observation": observations,
+                "observation": self._flatten_dict({
+                    feature: observation[feature] for feature in self._features
+                }),
                 "c": c,
                 "c_next": c_next 
             })
-            save_data["action"].append(action)
-            save_data["observation"].append(observation)
-            save_data["action"].append(c)
-            save_data["action"].append(c_next)
+
+            if save_data is not None:
+                save_data["action"].append(action)
+                save_data["observation"].append(self._flatten_dict({
+                    feature: observation[feature] for feature in self._features
+                }))
+                save_data["c"].append(c)
+                save_data["c_next"].append(c_next)
             
             observation = observation_next            
             episode_length += 1
@@ -254,18 +257,25 @@ class SafetyLayer:
         for i, model in enumerate(self._models):
             model.save(output_folder, i)
 
-    def save_replay_buffer(replay_buffer, filename="data/replay_buffer.npz"):
+        self.save_replay_buffer(save_data)
+
+    def save_replay_buffer(self, save_data, filename="data/replay_buffer.npz"):
         # Convert lists to arrays
-        actions = np.array([replay_buffer["action"]])
-        observations = np.array([replay_buffer["observation"]])
-        c = np.array([replay_buffer["c"]])
-        c_next = np.array([replay_buffer["c_next"]])
+        actions = np.array(save_data["action"])
+        observations = np.array(save_data["observation"])
+        c = np.array(save_data["c"])
+        c_next = np.array(save_data["c_next"])
+
+        print(actions.shape)
+        print(observations.shape)
+        print(c.shape)
+        print(c_next.shape)
 
         np.savez_compressed(filename,
                             actions=actions,
                             observations=observations,
                             c=c,
                             c_next=c_next)
-        print(f"Replay buffer saved to {filename}")
+        print(f"Data saved to {filename}")
 
 

@@ -173,7 +173,7 @@ arguments:
           - name: "test"
             default: false
           - name: "safety_layer_only"
-            default: false
+            default: true
           - name: "render_training"
             default: false
           - name: "render_evaluation"
