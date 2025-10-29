@@ -289,8 +289,8 @@ class DDPG:
             sim_end = time.time()
             time_simulating += sim_end - sim_start
 
-            if np.any(c):
-                print("CONSTRAINT VIOLATION")
+            #if np.any(c):
+            #    print("CONSTRAINT VIOLATION")
 
             # Make all updates at the end of the episode
             if done or (episode_length == self._config.max_episode_length):

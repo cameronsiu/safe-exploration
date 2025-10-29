@@ -33,7 +33,7 @@ class ObstacleAvoid(gym.Env):
         self._obstacles = np.array([
             # Walls around border
             [-1, 0, 1.02, 1],
-            [0.89, 0, 1, 1],
+            [0.98, 0, 1, 1],
             [-1, -1, 3, 1.02],
             [-1, 0.98, 3, 1],
 
@@ -214,6 +214,10 @@ class ObstacleAvoid(gym.Env):
     
     def _get_lidar_readings(self):
         if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
+            return self._lidar_readings
+        elif self._did_agent_collide():
+            self._lidar_readings = np.zeros((self._lidar_directions.shape[0]))
+            self._lidar_measure_time = self._current_time
             return self._lidar_readings
         else:
             number_of_lidars = self._lidar_directions.shape[0]

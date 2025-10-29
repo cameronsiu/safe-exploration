@@ -78,8 +78,11 @@ class SafetyLayer:
 
         observation = self._env.reset()
 
+        bias_direction = np.random.random(2) * 0.1
+
         for step in range(num_steps):            
             action = self._env.action_space.sample()
+            action = action + bias_direction
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action)
             c_next = self._env.get_constraint_values()
@@ -102,6 +105,7 @@ class SafetyLayer:
             if done or (episode_length == self._config.max_episode_length):
                 observation = self._env.reset()
                 episode_length = 0
+                bias_direction = np.random.random(2) * 0.1
 
     def _evaluate_batch(self, batch):
         observation = self._as_tensor(batch["observation"])
