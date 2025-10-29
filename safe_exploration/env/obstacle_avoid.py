@@ -16,7 +16,7 @@ class ObstacleAvoid(gym.Env):
         # cameron: the action space are velocity commands we send to the ball
         # It is one dimensional
 
-        num_lidars = 4
+        num_lidars = 8
         self._lidar_directions = self._make_lidar_directions(num_lidars)
 
         self.action_space = Box(low=-1, high=1, shape=(2,), dtype=np.float32)
@@ -196,7 +196,7 @@ class ObstacleAvoid(gym.Env):
     
     def _move_agent(self, velocity):
         # Assume that frequency of motor is 1 (one action per second)
-        self._agent_position += self._config.frequency_ratio * velocity
+        self._agent_position = self._agent_position + self._config.frequency_ratio * velocity
     
     def _did_agent_collide(self):
         collide_with_obstacle = np.any(self.point_in_boxes(
