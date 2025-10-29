@@ -262,7 +262,13 @@ class DDPG:
         time_training = 0
         time_eval = 0
 
+        previous_done = False
+
         for step in range(number_of_steps):
+
+            if self._env._did_agent_collide():
+                pass
+
             sim_start = time.time()
             # Randomly sample episode_ for some initial steps
             action = self._env.action_space.sample() if step < self._config.start_steps \
@@ -283,6 +289,9 @@ class DDPG:
                 "observation_next": self._flatten_dict(observation_next),
                 "done": np.asarray(done),
             })
+
+            if self._env._did_agent_collide():
+                self._get_action(observation, c)
 
             observation = observation_next
             c = self._env.get_constraint_values()
@@ -328,6 +337,7 @@ class DDPG:
                 print(f"target compute: {self._target_copy_time * 1000:.2}")
                 print("----------------------------------------------------------")
             
+            previous_done = done
         
         self._writer.close()
         print("==========================================================")
