@@ -119,7 +119,7 @@ class DDPG:
 
     def _flatten_dict(self, inp):
         if type(inp) == dict:
-            inp = np.concatenate(list(inp.values()))
+            inp = np.concatenate(list([inp[key] for key in sorted(inp.keys())]))
         return inp
 
     def _update_targets(self, target, main):
@@ -268,7 +268,7 @@ class DDPG:
             action = self._env.action_space.sample() if step < self._config.start_steps \
                      else self._get_action(observation, c)
             
-            if self._render_training:
+            if step > self._config.start_steps and self._render_training:
                 self._env.render_env()
             
             observation_next, reward, done, _ = self._env.step(action)
@@ -288,6 +288,9 @@ class DDPG:
             c = self._env.get_constraint_values()
             sim_end = time.time()
             time_simulating += sim_end - sim_start
+
+            if np.any(c):
+                print("CONSTRAINT VIOLATION")
 
             # Make all updates at the end of the episode
             if done or (episode_length == self._config.max_episode_length):

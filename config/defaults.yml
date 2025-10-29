@@ -137,7 +137,7 @@ arguments:
           - name: "batch_size"
             default: 256
           - name: "lr"
-            default: 0.0001
+            default: 0.001
           - name: "max_episode_length"
             default: 300
           - name: "steps_per_epoch"

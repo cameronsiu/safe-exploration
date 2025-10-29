@@ -15,15 +15,17 @@ class ObstacleAvoid(gym.Env):
         # cameron: the action space are velocity commands we send to the ball
         # It is one dimensional
 
-        num_lidars = 16
+        num_lidars = 4
         self._lidar_directions = self._make_lidar_directions(num_lidars)
 
-        self.action_space = Box(low=-0.3, high=0.3, shape=(2,), dtype=np.float32)
+        self.action_space = Box(low=-1, high=1, shape=(2,), dtype=np.float32)
         self.observation_space = Dict({
             'agent_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
             'target_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
             #'nearest_lidar_distance': Box(low=0, high=1, shape=(1,), dtype=np.float32),
             #'nearest_lidar_direction': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
+            #'lidar_readings_x': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32),
+            #'lidar_readings_y': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32),
             'lidar_readings': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32)
         })
 
@@ -202,12 +204,13 @@ class ObstacleAvoid(gym.Env):
                np.random.normal(0, self._config.target_noise_std, 2)
     
     def get_num_constraints(self):
-        return self._lidar_directions.shape[0]
-        # return 1
+        # return self._lidar_directions.shape[0]
+        return 1
 
     def get_constraint_values(self):
-        return self._config.agent_slack - self._get_lidar_readings()
-        # return np.array([self._config.agent_slack - np.min(self._get_lidar_readings())])
+        # return self._config.agent_slack - self._get_lidar_readings()
+        clipped_readings = np.clip(self._get_lidar_readings(), 0, 0.2)
+        return np.array([self._config.agent_slack - np.min(clipped_readings)])
     
     def _get_lidar_readings(self):
         if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
@@ -236,14 +239,17 @@ class ObstacleAvoid(gym.Env):
         reward = self._get_reward(initial_position, self._agent_position, action)
 
         lidar_readings = self._get_lidar_readings()
-        nearest_lidar = np.argmin(lidar_readings)
+        scaled_lidar_directions = self._lidar_directions * lidar_readings[:, None]
+        # nearest_lidar = np.argmin(lidar_readings)
         # Prepare return payload
         observation = {
             "agent_position": self._agent_position,
             "target_postion": self._get_noisy_target_position(), # cameron: target position has noise,
             #"nearest_lidar_distance": lidar_readings[nearest_lidar:nearest_lidar+1],
             #"nearest_lidar_direction": self._lidar_directions[nearest_lidar],
-            "lidar_readings": self._get_lidar_readings()
+            #"lidar_readings_x": scaled_lidar_directions[:, 0],
+            #"lidar_readings_y": scaled_lidar_directions[:, 1],
+            "lidar_readings": lidar_readings
         }
 
         done = self._did_agent_collide() \
