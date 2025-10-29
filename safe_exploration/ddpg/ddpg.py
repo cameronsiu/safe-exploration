@@ -305,9 +305,9 @@ class DDPG:
             violated = np.any(c > 0)
             violation_total += 1
             if violated:
-                if step >= self._config.start_steps:
-                    print(f"###### Constraint violated!")
-                    print(f"{observation} {action} {observation_next}")
+                #if step >= self._config.start_steps:
+                    #print(f"###### Constraint violated!")
+                    #print(f"{observation} {action} {observation_next}")
                 violation_count += 1
 
             # Make all updates at the end of the episode

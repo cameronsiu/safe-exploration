@@ -73,13 +73,16 @@ class SafetyLayer:
 
         self._optimizers = [Adam(x.parameters(), lr=self._config.lr) for x in self._models]
 
-    def _sample_steps(self, num_steps):
+    def _sample_steps(self, num_steps, save_data):
         episode_length = 0
 
         observation = self._env.reset()
 
+        bias_direction = np.random.random(2) * 0.1
+
         for step in range(num_steps):            
             action = self._env.action_space.sample()
+            action = action + bias_direction
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action)
             c_next = self._env.get_constraint_values()
@@ -87,14 +90,19 @@ class SafetyLayer:
             if self._render:
                 self._env.render_env()
 
+            observations = self._flatten_dict({
+                feature: observation[feature] for feature in self._features
+            }),
             self._replay_buffer.add({
                 "action": action,
-                "observation": self._flatten_dict({
-                    feature: observation[feature] for feature in self._features
-                }),
+                "observation": observations,
                 "c": c,
                 "c_next": c_next 
             })
+            save_data["action"].append(action)
+            save_data["observation"].append(observation)
+            save_data["action"].append(c)
+            save_data["action"].append(c_next)
             
             observation = observation_next            
             episode_length += 1
@@ -102,6 +110,7 @@ class SafetyLayer:
             if done or (episode_length == self._config.max_episode_length):
                 observation = self._env.reset()
                 episode_length = 0
+                bias_direction = np.random.random(2) * 0.1
 
     def _evaluate_batch(self, batch):
         observation = self._as_tensor(batch["observation"])
@@ -174,7 +183,7 @@ class SafetyLayer:
         multipliers = [np.clip(x, 0, np.inf) for x in unclipped_multipliers]
 
         # Calculate correction
-        # correction = np.max(multipliers) * g[np.argmax(multipliers)]
+        correction = np.max(multipliers) * g[np.argmax(multipliers)]
 
         action_new = action - correction
 
@@ -200,14 +209,22 @@ class SafetyLayer:
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
+        save_data = {
+            "action": [],
+            "observation": [],
+            "c": [],
+            "c_next": [],
+        }
+
         for epoch in range(self._config.epochs):
             # Just sample episodes for the whole epoch
-            self._sample_steps(self._config.steps_per_epoch)
+            self._sample_steps(self._config.steps_per_epoch, save_data)
             
             # Do the update from memory
             losses = np.mean(np.concatenate([self._update_batch(batch) for batch in \
                     self._replay_buffer.get_sequential(self._config.batch_size)]).reshape(-1, self._num_constraints), axis=0)
 
+            # Append to save data for visualization
             self._replay_buffer.clear()
 
             # Write losses and histograms to tensorboard
@@ -236,4 +253,19 @@ class SafetyLayer:
 
         for i, model in enumerate(self._models):
             model.save(output_folder, i)
+
+    def save_replay_buffer(replay_buffer, filename="data/replay_buffer.npz"):
+        # Convert lists to arrays
+        actions = np.array([replay_buffer["action"]])
+        observations = np.array([replay_buffer["observation"]])
+        c = np.array([replay_buffer["c"]])
+        c_next = np.array([replay_buffer["c_next"]])
+
+        np.savez_compressed(filename,
+                            actions=actions,
+                            observations=observations,
+                            c=c,
+                            c_next=c_next)
+        print(f"Replay buffer saved to {filename}")
+
 
