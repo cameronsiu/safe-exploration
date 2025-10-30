@@ -106,6 +106,7 @@ class SafetyLayer:
                 }))
                 save_data["c"].append(c)
                 save_data["c_next"].append(c_next)
+                save_data["agent_position"].append(observation["agent_position"])
             
             observation = observation_next            
             episode_length += 1
@@ -217,6 +218,7 @@ class SafetyLayer:
             "observation": [],
             "c": [],
             "c_next": [],
+            "agent_position": [],
         }
 
         for epoch in range(self._config.epochs):
@@ -265,6 +267,7 @@ class SafetyLayer:
         observations = np.array(save_data["observation"])
         c = np.array(save_data["c"])
         c_next = np.array(save_data["c_next"])
+        agent_position = np.array(save_data["agent_position"])
 
         print(actions.shape)
         print(observations.shape)
@@ -275,7 +278,8 @@ class SafetyLayer:
                             actions=actions,
                             observations=observations,
                             c=c,
-                            c_next=c_next)
+                            c_next=c_next,
+                            agent_position=agent_position)
         print(f"Data saved to {filename}")
 
 
