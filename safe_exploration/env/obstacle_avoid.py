@@ -16,7 +16,7 @@ class ObstacleAvoid(gym.Env):
         # cameron: the action space are velocity commands we send to the ball
         # It is one dimensional
 
-        num_lidars = 8
+        num_lidars = 12
         self._lidar_directions = self._make_lidar_directions(num_lidars)
 
         self.action_space = Box(low=-1, high=1, shape=(2,), dtype=np.float32)
@@ -152,11 +152,11 @@ class ObstacleAvoid(gym.Env):
         agent_on_top = np.random.random(1)[0] > 0.5
 
         if agent_on_top:
-            self._agent_position = np.array([0, 1]) + agent_position * np.array([1, -0.25])
-            self._target_position = np.array([0, 0]) + target_position * np.array([1, 0.25])
+            self._agent_position = np.array([0.1, 0.9]) + agent_position * np.array([0.8, -0.25])
+            self._target_position = np.array([0.1, 0.1]) + target_position * np.array([0.8, 0.25])
         else:
-            self._agent_position = np.array([0, 0]) + agent_position * np.array([1, 0.25])
-            self._target_position = np.array([0, 1]) + target_position * np.array([1, -0.25])
+            self._agent_position = np.array([0.1, 0.1]) + agent_position * np.array([0.8, 0.25])
+            self._target_position = np.array([0.1, 0.9]) + target_position * np.array([0.8, -0.25])
 
         self._current_time = 0.
 
@@ -169,10 +169,10 @@ class ObstacleAvoid(gym.Env):
         agent_on_top = self._agent_position[1] > 0.5
         target_position = np.random.random(2)
         if agent_on_top:
-            self._target_position = np.array([0, 0]) + target_position * np.array([1, 0.25])
+            self._target_position = np.array([0.1, 0.1]) + target_position * np.array([0.8, 0.25])
         else:
-            self._target_position = np.array([0, 1]) + target_position * np.array([1, -0.25])
-
+            self._target_position = np.array([0.1, 0.8]) + target_position * np.array([0.8, -0.25])
+        
         # while True:
         #     target_position = np.random.random(2)
         #     if agent_on_top:
