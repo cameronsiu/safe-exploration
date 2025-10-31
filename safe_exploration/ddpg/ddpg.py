@@ -255,6 +255,8 @@ class DDPG:
         episode_reward = 0
         episode_length = 0
         step_trained_on = 0
+        violations = 0
+        collisions = 0
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
@@ -294,7 +296,7 @@ class DDPG:
             })
 
             if self._env._did_agent_collide():
-                self._get_action(observation, c)
+                collisions += 1
 
             observation = observation_next
             c = self._env.get_constraint_values()
@@ -302,7 +304,7 @@ class DDPG:
             time_simulating += sim_end - sim_start
 
             if np.any(c > 0):
-                pass
+                violations += 1
 
             # Make all updates at the end of the episode
             if done or (episode_length == self._config.max_episode_length):
@@ -316,12 +318,16 @@ class DDPG:
                 # Log metrics
                 self._writer.add_scalar("episode length", episode_length, self._train_global_step)
                 self._writer.add_scalar("episode reward", episode_reward, self._train_global_step)
+                self._writer.add_scalar("constraint violations", violations, self._train_global_step)
+                self._writer.add_scalar("collisions", collisions, self._train_global_step)
 
                 # Reset episode
                 observation = self._env.reset()
                 c = self._env.get_constraint_values()
                 episode_reward = 0
                 episode_length = 0
+                violations = 0
+                collisions = 0
 
             # Check if the epoch is over
             if step != 0 and step % self._config.steps_per_epoch == 0: 
