@@ -21,7 +21,7 @@
   "workspaceFolder": "/isaac-sim/safe-exploration",
   "workspaceMount": "source=${localWorkspaceFolder},target=/isaac-sim/safe-exploration,type=bind",
   "remoteUser": "isaac-sim",
-  "updateRemoteUserUID": false,
+  "updateRemoteUserUID": true,
   "settings": {
     "terminal.integrated.shell.linux": "/bin/bash"
   },
