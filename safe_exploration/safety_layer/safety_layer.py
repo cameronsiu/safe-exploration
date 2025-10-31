@@ -15,13 +15,16 @@ from safe_exploration.safety_layer.constraint_model import ConstraintModel
 from safe_exploration.utils.list import for_each
 
 class SafetyLayer:
-    def __init__(self, env, constraint_model_files:List[str]):
+    def __init__(self, env, constraint_model_files:List[str], render = False):    
         self._env = env
         self._config = Config.get().safety_layer.trainer
 
         self._num_constraints = env.get_num_constraints()
         if self._num_constraints != len(constraint_model_files):
             constraint_model_files = [None]*self._num_constraints
+
+        #self._features = ["lidar_readings_x", "lidar_readings_y"]
+        self._features = ["lidar_readings"]
 
         self._initialize_constraint_models(constraint_model_files)
 
@@ -34,6 +37,8 @@ class SafetyLayer:
 
         if self._config.use_gpu:
             self._cuda()
+
+        self._render = render
 
     def _as_tensor(self, ndarray, requires_grad=False):
         tensor = torch.Tensor(ndarray)
@@ -49,12 +54,23 @@ class SafetyLayer:
     def _train_mode(self):
         for_each(lambda x: x.train(), self._models)
 
+    def _flatten_dict(self, inp):
+        if type(inp) == dict:
+            inp = np.concatenate(list([inp[key] for key in sorted(inp.keys())]))
+        return inp
+
     def _initialize_constraint_models(self, constraint_model_files: List[str]):
-        # For ballnd, this is just 2 constraints (min and max x)
-        # for spaceship, we have 4 constraints (min_x, max_x, min_y, max_y)
-        self._models = [ConstraintModel(self._env.observation_space["agent_position"].shape[0],
+        feature_dict = {
+            feature: self._env.observation_space.spaces[feature] for feature in self._features
+        }
+        observation_dim = (seq(feature_dict.values())
+                            .map(lambda x: x.shape[0])
+                            .sum())
+        #observation_dim = 1
+        self._models = [ConstraintModel(observation_dim,
                                         self._env.action_space.shape[0], model_file) \
                         for model_file in constraint_model_files]
+
         self._optimizers = [Adam(x.parameters(), lr=self._config.lr) for x in self._models]
 
     def _sample_steps(self, num_steps):
@@ -62,15 +78,23 @@ class SafetyLayer:
 
         observation = self._env.reset()
 
+        bias_direction = np.random.random(2) * 0.1
+
         for step in range(num_steps):            
             action = self._env.action_space.sample()
+            action = action + bias_direction
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action)
             c_next = self._env.get_constraint_values()
 
+            if self._render:
+                self._env.render_env()
+
             self._replay_buffer.add({
                 "action": action,
-                "observation": observation["agent_position"],
+                "observation": self._flatten_dict({
+                    feature: observation[feature] for feature in self._features
+                }),
                 "c": c,
                 "c_next": c_next 
             })
@@ -81,6 +105,7 @@ class SafetyLayer:
             if done or (episode_length == self._config.max_episode_length):
                 observation = self._env.reset()
                 episode_length = 0
+                bias_direction = np.random.random(2) * 0.1
 
     def _evaluate_batch(self, batch):
         observation = self._as_tensor(batch["observation"])
@@ -88,7 +113,7 @@ class SafetyLayer:
         c = self._as_tensor(batch["c"])
         c_next = self._as_tensor(batch["c_next"])
         
-        gs = [x(observation) for x in self._models]
+        gs = [x(observation) for i, x in enumerate(self._models)]
 
         c_next_predicted = [c[:, i] + \
                             torch.bmm(x.view(x.shape[0], 1, -1), action.view(action.shape[0], -1, 1)).view(-1) \
@@ -132,20 +157,38 @@ class SafetyLayer:
     def get_safe_action(self, observation, action, c):    
         # Find the values of G
         self._eval_mode()
-        g = [x(self._as_tensor(observation["agent_position"]).view(1, -1)) for x in self._models]
+        o = self._as_tensor(self._flatten_dict({
+            feature: observation[feature] for feature in self._features
+        })).view(1, -1)
+        #g = [x(o[:, i:i+1]) for i, x in enumerate(self._models)]
+        g = [x(o) for i, x in enumerate(self._models)]
         self._train_mode()
 
         # Fidn the lagrange multipliers
         g = [x.data.numpy().reshape(-1) for x in g]
-        multipliers = [(np.dot(g_i, action) + c_i) / np.dot(g_i, g_i) for g_i, c_i in zip(g, c)]
-        multipliers = [np.clip(x, 0, np.inf) for x in multipliers]
+
+        #g = [
+        #    np.array([0.1, 0]),
+        #    np.array([0, 0.1]),
+        #    np.array([-0.1, 0]),
+        #    np.array([0, -0.1]),
+        #]
+
+        unclipped_multipliers = [(np.dot(g_i, action) + c_i) / np.dot(g_i, g_i) for g_i, c_i in zip(g, c)]
+        multipliers = [np.clip(x, 0, np.inf) for x in unclipped_multipliers]
 
         # Calculate correction
         correction = np.max(multipliers) * g[np.argmax(multipliers)]
 
         action_new = action - correction
 
-        return action_new
+        action_clipped = np.clip(action_new, -1, 1)
+
+        agent_position = observation["agent_position"]
+        if agent_position[0] < 0.1 or agent_position[1] > 0.9:
+            pass
+
+        return action_clipped
 
     def train(self, output_folder:str):
 
