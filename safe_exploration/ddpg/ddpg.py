@@ -82,7 +82,7 @@ class DDPG:
 
     def _get_action(self, observation, c, is_training=True):
         # Action + random gaussian noise (as recommended in spining up)
-        action = self._actor(self._as_tensor(self._flatten_dict(observation)))
+        action = 0.3*self._actor(self._as_tensor(self._flatten_dict(observation)))
         if is_training:
             action += self._config.action_noise_range * torch.randn(self._env.action_space.shape)
 
@@ -268,8 +268,16 @@ class DDPG:
         time_training = 0
         time_eval = 0
 
-        safety_layer_print = True
+        safety_layer_on = False
         previous_done = False
+
+        save_data = {
+            "action": [],
+            "observation": [],
+            "c": [],
+            "c_next": [],
+            "agent_position": [],
+        }
 
         for step in range(number_of_steps):
 
@@ -281,9 +289,9 @@ class DDPG:
             if step < self._config.start_steps:
                 action = self._env.action_space.sample()
             else:
-                if safety_layer_print:
+                if not safety_layer_on:
                     print("Safety layer is now on")
-                    safety_layer_print = False
+                    safety_layer_on = True 
                 action = self._get_action(observation, c)
 
                 if self._render_training:
@@ -301,22 +309,22 @@ class DDPG:
                 "observation_next": self._flatten_dict(observation_next),
                 "done": np.asarray(done),
             })
-
-            if self._env._did_agent_collide():
-                self._get_action(observation, c)
+            if save_data is not None and safety_layer_on:
+                save_data["action"].append(action)
+                save_data["observation"].append(observation["lidar_readings"]),
+                save_data["c"].append(c)
+                save_data["agent_position"].append(observation["agent_position"])
 
             observation = observation_next
             c = self._env.get_constraint_values()
             sim_end = time.time()
             time_simulating += sim_end - sim_start
 
-            violated = np.any(c > 0)
-            violation_total += 1
-            if violated:
-                #if step >= self._config.start_steps:
-                    #print(f"###### Constraint violated!")
-                    #print(f"{observation} {action} {observation_next}")
-                violation_count += 1
+            if safety_layer_on:
+                violated = np.any(c > 0)
+                violation_total += 1
+                if violated:
+                    violation_count += 1
 
             # Make all updates at the end of the episode
             if done or (episode_length == self._config.max_episode_length):
@@ -331,8 +339,9 @@ class DDPG:
                 self._writer.add_scalar("episode length", episode_length, self._train_global_step)
                 self._writer.add_scalar("episode reward", episode_reward, self._train_global_step)
 
-                violation_rate = violation_count / (violation_total + 1e-8)
-                self._writer.add_scalar("safety/violation_rate", violation_rate, self._train_global_step)
+                if safety_layer_on:
+                    violation_rate = violation_count / violation_total
+                    self._writer.add_scalar("safety/violation_rate", violation_rate, self._train_global_step)
                 # Reset episode
                 observation = self._env.reset()
                 c = self._env.get_constraint_values()
@@ -370,4 +379,18 @@ class DDPG:
 
         self._actor.save(output_folder)
         self._critic.save(output_folder)
+        self.save_replay_buffer(save_data)
 
+    def save_replay_buffer(self, save_data, filename="data/ddpg_replay_buffer.npz"):
+        # Convert lists to arrays
+        actions = np.array(save_data["action"])
+        observations = np.array(save_data["observation"])
+        c = np.array(save_data["c"])
+        agent_position = np.array(save_data["agent_position"])
+
+        np.savez_compressed(filename,
+                            actions=actions,
+                            observations=observations,
+                            c=c,
+                            agent_position=agent_position)
+        print(f"Data saved to {filename}")

@@ -53,9 +53,9 @@ class Trainer:
         if self._config.use_safety_layer:
             safety_layer = SafetyLayer(env, constraint_model_files, render=False)
             
-            if not self._config.test:
+            if self._config.train_safety_layer:
                 safety_layer.train(self._config.output_folder)
-            else:
+            if self._config.test:
                 safety_layer.evaluate()
         else:
             safety_layer = None

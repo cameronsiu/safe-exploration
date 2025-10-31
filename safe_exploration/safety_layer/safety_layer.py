@@ -269,11 +269,6 @@ class SafetyLayer:
         c_next = np.array(save_data["c_next"])
         agent_position = np.array(save_data["agent_position"])
 
-        print(actions.shape)
-        print(observations.shape)
-        print(c.shape)
-        print(c_next.shape)
-
         np.savez_compressed(filename,
                             actions=actions,
                             observations=observations,

@@ -2,22 +2,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Load replay buffer
-data = np.load("data/replay_buffer.npz")
+data = np.load("data/ddpg_replay_buffer.npz")
 actions = np.array(data["actions"])  # shape: (N, 2)
 observations = np.array(data["observations"])  # shape: (N, Num lidars)
 c = np.array(data["c"])
-c_next = np.array(data["c_next"])
+#c_next = np.array(data["c_next"])
 agent_position = np.array(data["agent_position"])
 
 def plot_actions(actions: np.ndarray, filename:str):
     # Actions is (Samples, 2)
     plt.figure(figsize=(5,5))
-    plt.scatter(actions[:,0], actions[:,1], alpha=0.6)
+    plt.scatter(actions[:,0], actions[:,1], alpha=0.6, s=0.5)
     plt.xlabel("Action dimension 0")
     plt.ylabel("Action dimension 1")
     plt.title("Scatter of Actions")
-    plt.xlim(-0.3, 0.3)
-    plt.ylim(-0.3, 0.3)
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(filename, dpi=300)
@@ -25,7 +23,7 @@ def plot_actions(actions: np.ndarray, filename:str):
 def plot_action_histogram(actions: np.ndarray, filename: str):
     # actions: shape (Samples, 2)
     plt.figure(figsize=(6,5))
-    plt.hist2d(actions[:,0], actions[:,1], bins=50, range=[[-0.3, 0.3], [-0.3, 0.3]], cmap='viridis')
+    plt.hist2d(actions[:,0], actions[:,1], bins=50, cmap='viridis')
     plt.colorbar(label='Frequency')
     plt.xlabel("Action dimension 0")
     plt.ylabel("Action dimension 1")
@@ -34,9 +32,11 @@ def plot_action_histogram(actions: np.ndarray, filename: str):
     plt.savefig(filename, dpi=300)
     plt.show()
 
-filename="./data/actions_plot.jpg"
-# plot_actions(actions, filename)
-#plot_action_histogram(actions, filename)
+filename="./data/ddpg_actions_plot.jpg"
+plot_actions(actions, filename)
+
+filename="./data/ddpg_actions_plot_historgram.jpg"
+plot_action_histogram(actions, filename)
 
 def plot_observations(observations: np.ndarray, filename:str):
     plt.figure(figsize=(10,5))
@@ -89,8 +89,8 @@ def plot_observation_histogram_grid(observations: np.ndarray, filename: str):
     plt.savefig(filename, dpi=300)
     plt.show()
 
-filename="./data/observations_plot.jpg"
-#plot_observation_histogram_grid(observations, filename)
+filename="./data/ddpg_observations_plot.jpg"
+plot_observation_histogram_grid(observations, filename)
 
 def plot_c(c: np.ndarray, filename:str):
     plt.figure(figsize=(10,5))
@@ -115,16 +115,14 @@ def plot_c_histogram(c: np.ndarray, filename: str):
     plt.show()
 
 
-filename="./data/c_next.jpg"
+filename="./data/ddpg_c.jpg"
 print(f"Max value of c: {np.max(c)}")
-print(f"Max value of c_next: {np.max(c_next)}")
-print(c_next.shape)
-# plot_c_histogram(c_next, filename)
+plot_c_histogram(c, filename)
 
 def plot_agent_position(agent_position: np.ndarray, filename:str):
     # Actions is (Samples, 2)
     plt.figure(figsize=(5,5))
-    plt.scatter(agent_position[:,0], agent_position[:,1], alpha=0.6, s=0.05)
+    plt.scatter(agent_position[:,0], agent_position[:,1], alpha=0.6, s=0.1)
     plt.xlabel("X")
     plt.ylabel("Y")
     plt.title("Scatter of Agent Positions")
@@ -143,7 +141,7 @@ def plot_agent_position_histogram(agent_position: np.ndarray, filename: str):
     plt.tight_layout()
     plt.savefig(filename, dpi=300)
 
-filename="./data/agent_position.jpg"
+filename="./data/ddpg_agent_position.jpg"
 plot_agent_position(agent_position, filename)
-filename="./data/agent_position_histogram.jpg"
+filename="./data/ddpg_agent_position_histogram.jpg"
 plot_agent_position_histogram(agent_position, filename)
