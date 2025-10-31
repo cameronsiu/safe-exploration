@@ -15,7 +15,8 @@ class ObstacleAvoid(gym.Env):
         # cameron: the action space are velocity commands we send to the ball
         # It is one dimensional
 
-        num_lidars = 12
+        self._num_lidar_buckets = 12
+        num_lidars = self._num_lidar_buckets * 4
         self._lidar_directions = self._make_lidar_directions(num_lidars)
 
         self.action_space = Box(low=-1, high=1, shape=(2,), dtype=np.float32)
@@ -26,7 +27,7 @@ class ObstacleAvoid(gym.Env):
             #'nearest_lidar_direction': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
             #'lidar_readings_x': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32),
             #'lidar_readings_y': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32),
-            'lidar_readings': Box(low=0, high=1, shape=(num_lidars,), dtype=np.float32)
+            'lidar_readings': Box(low=0, high=1, shape=(self._num_lidar_buckets,), dtype=np.float32)
         })
 
         # Sets all the episode specific variables
@@ -216,13 +217,15 @@ class ObstacleAvoid(gym.Env):
         if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
             return self._lidar_readings
         elif self._did_agent_collide():
-            self._lidar_readings = np.zeros((self._lidar_directions.shape[0]))
+            self._lidar_readings = np.zeros((self._num_lidar_buckets))
             self._lidar_measure_time = self._current_time
             return self._lidar_readings
         else:
             number_of_lidars = self._lidar_directions.shape[0]
             agent_positions = np.tile(self._agent_position, reps=(number_of_lidars,1))
-            self._lidar_readings = self.ray_aabb2d_distances(agent_positions, self._lidar_directions, self._obstacles)
+            lidar_distances = self.ray_aabb2d_distances(agent_positions, self._lidar_directions, self._obstacles)
+            distances_per_bucket = int(lidar_distances.shape[0] / self._num_lidar_buckets)
+            self._lidar_readings = np.array([np.min(lidar_distances[i:i+distances_per_bucket]) for i in range(0, lidar_distances.shape[0], distances_per_bucket)])
             self._lidar_measure_time = self._current_time
             return self._lidar_readings
 
@@ -243,7 +246,6 @@ class ObstacleAvoid(gym.Env):
         reward = self._get_reward(initial_position, self._agent_position, action)
 
         lidar_readings = self._get_lidar_readings()
-        scaled_lidar_directions = self._lidar_directions * lidar_readings[:, None]
         # nearest_lidar = np.argmin(lidar_readings)
         # Prepare return payload
         observation = {
@@ -307,15 +309,17 @@ class ObstacleAvoid(gym.Env):
             )
 
         lidar_readings = self._get_lidar_readings()
-        for lidar_idx in range(self._lidar_directions.shape[0]):
-            lidar_dir = self._lidar_directions[lidar_idx]
+        num_lidars = lidar_readings.shape[0]
+        lidar_directions = self._make_lidar_directions(num_lidars)
+        for lidar_idx in range(num_lidars):
+            lidar_dir = lidar_directions[lidar_idx]
             lidar_dist = lidar_readings[lidar_idx]
             lidar_point = self._agent_position + lidar_dir * lidar_dist
             lidar_screen_point = lidar_point * self.window_size
 
             pygame.draw.line(
                 canvas,
-                (0, 0, 255),
+                (0, 0, 255, 100),
                 agent_screen_position,
                 lidar_screen_point)
 
