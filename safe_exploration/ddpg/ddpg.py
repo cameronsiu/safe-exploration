@@ -261,23 +261,11 @@ class DDPG:
         print(f"Training DDPG for {number_of_steps}")
         print(f"DDPG Tensorboard folder: {self._writer.logdir}")
 
-        violation_count = 0
-        violation_total = 0
-
         time_simulating = 0
         time_training = 0
         time_eval = 0
 
-        safety_layer_on = False
         previous_done = False
-
-        save_data = {
-            "action": [],
-            "observation": [],
-            "c": [],
-            "c_next": [],
-            "agent_position": [],
-        }
 
         for step in range(number_of_steps):
 
@@ -286,16 +274,11 @@ class DDPG:
 
             sim_start = time.time()
             # Randomly sample episode_ for some initial steps
-            if step < self._config.start_steps:
-                action = self._env.action_space.sample()
-            else:
-                if not safety_layer_on:
-                    print("Safety layer is now on")
-                    safety_layer_on = True 
-                action = self._get_action(observation, c)
+            action = self._env.action_space.sample() if step < self._config.start_steps \
+                     else self._get_action(observation, c)
 
-                if self._render_training:
-                    self._env.render_env()
+            if step > self._config.start_steps and self._render_training:
+                self._env.render_env()
 
             observation_next, reward, done, _ = self._env.step(action)
                 
@@ -309,22 +292,17 @@ class DDPG:
                 "observation_next": self._flatten_dict(observation_next),
                 "done": np.asarray(done),
             })
-            if save_data is not None and safety_layer_on:
-                save_data["action"].append(action)
-                save_data["observation"].append(observation["lidar_readings"]),
-                save_data["c"].append(c)
-                save_data["agent_position"].append(observation["agent_position"])
+
+            if self._env._did_agent_collide():
+                self._get_action(observation, c)
 
             observation = observation_next
             c = self._env.get_constraint_values()
             sim_end = time.time()
             time_simulating += sim_end - sim_start
 
-            if safety_layer_on:
-                violated = np.any(c > 0)
-                violation_total += 1
-                if violated:
-                    violation_count += 1
+            if np.any(c > 0):
+                pass
 
             # Make all updates at the end of the episode
             if done or (episode_length == self._config.max_episode_length):
@@ -339,16 +317,11 @@ class DDPG:
                 self._writer.add_scalar("episode length", episode_length, self._train_global_step)
                 self._writer.add_scalar("episode reward", episode_reward, self._train_global_step)
 
-                if safety_layer_on:
-                    violation_rate = violation_count / violation_total
-                    self._writer.add_scalar("safety/violation_rate", violation_rate, self._train_global_step)
                 # Reset episode
                 observation = self._env.reset()
                 c = self._env.get_constraint_values()
                 episode_reward = 0
                 episode_length = 0
-                violation_count = 0
-                violation_total = 0
 
             # Check if the epoch is over
             if step != 0 and step % self._config.steps_per_epoch == 0: 
@@ -379,18 +352,4 @@ class DDPG:
 
         self._actor.save(output_folder)
         self._critic.save(output_folder)
-        self.save_replay_buffer(save_data)
 
-    def save_replay_buffer(self, save_data, filename="data/ddpg_replay_buffer.npz"):
-        # Convert lists to arrays
-        actions = np.array(save_data["action"])
-        observations = np.array(save_data["observation"])
-        c = np.array(save_data["c"])
-        agent_position = np.array(save_data["agent_position"])
-
-        np.savez_compressed(filename,
-                            actions=actions,
-                            observations=observations,
-                            c=c,
-                            agent_position=agent_position)
-        print(f"Data saved to {filename}")

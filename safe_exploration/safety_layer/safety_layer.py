@@ -73,7 +73,7 @@ class SafetyLayer:
 
         self._optimizers = [Adam(x.parameters(), lr=self._config.lr) for x in self._models]
 
-    def _sample_steps(self, num_steps, save_data=None):
+    def _sample_steps(self, num_steps):
         episode_length = 0
 
         observation = self._env.reset()
@@ -98,15 +98,6 @@ class SafetyLayer:
                 "c": c,
                 "c_next": c_next 
             })
-
-            if save_data is not None:
-                save_data["action"].append(action)
-                save_data["observation"].append(self._flatten_dict({
-                    feature: observation[feature] for feature in self._features
-                }))
-                save_data["c"].append(c)
-                save_data["c_next"].append(c_next)
-                save_data["agent_position"].append(observation["agent_position"])
             
             observation = observation_next            
             episode_length += 1
@@ -213,23 +204,14 @@ class SafetyLayer:
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
-        save_data = {
-            "action": [],
-            "observation": [],
-            "c": [],
-            "c_next": [],
-            "agent_position": [],
-        }
-
         for epoch in range(self._config.epochs):
             # Just sample episodes for the whole epoch
-            self._sample_steps(self._config.steps_per_epoch, save_data)
+            self._sample_steps(self._config.steps_per_epoch)
             
             # Do the update from memory
             losses = np.mean(np.concatenate([self._update_batch(batch) for batch in \
                     self._replay_buffer.get_sequential(self._config.batch_size)]).reshape(-1, self._num_constraints), axis=0)
 
-            # Append to save data for visualization
             self._replay_buffer.clear()
 
             # Write losses and histograms to tensorboard
@@ -258,23 +240,4 @@ class SafetyLayer:
 
         for i, model in enumerate(self._models):
             model.save(output_folder, i)
-
-        self.save_replay_buffer(save_data)
-
-    def save_replay_buffer(self, save_data, filename="data/replay_buffer.npz"):
-        # Convert lists to arrays
-        actions = np.array(save_data["action"])
-        observations = np.array(save_data["observation"])
-        c = np.array(save_data["c"])
-        c_next = np.array(save_data["c_next"])
-        agent_position = np.array(save_data["agent_position"])
-
-        np.savez_compressed(filename,
-                            actions=actions,
-                            observations=observations,
-                            c=c,
-                            c_next=c_next,
-                            agent_position=agent_position)
-        print(f"Data saved to {filename}")
-
 
