@@ -257,6 +257,7 @@ class DDPG:
         step_trained_on = 0
         violations = 0
         collisions = 0
+        total_collisions = 0
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
@@ -283,7 +284,7 @@ class DDPG:
                 self._env.render_env()
 
             observation_next, reward, done, _ = self._env.step(action)
-                
+
             episode_reward += reward
             episode_length += 1
 
@@ -297,6 +298,7 @@ class DDPG:
 
             if self._env._did_agent_collide():
                 collisions += 1
+                total_collisions += 1
 
             observation = observation_next
             c = self._env.get_constraint_values()
@@ -334,8 +336,7 @@ class DDPG:
                 eval_start = time.time()
                 epoch_number = int(step / self._config.steps_per_epoch)
                 print(f"Finished epoch {epoch_number}. Running validation ...")
-                should_render = epoch_number % 10 == 0
-                self.evaluate(should_render)
+                self.evaluate(self._render_evaluation)
                 eval_end = time.time()
                 time_eval += eval_end - eval_start
                 print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
@@ -355,6 +356,9 @@ class DDPG:
         print("==========================================================")
         print(f"Finished DDPG training. Time spent: {(time.time() - start_time) // 1} secs")
         print("==========================================================")
+        print(f"Number of collisions : {total_collisions}")
+
+        self._writer.add_scalar("total_collisions", total_collisions, 0)
 
         self._actor.save(output_folder)
         self._critic.save(output_folder)
