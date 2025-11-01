@@ -82,7 +82,7 @@ class DDPG:
 
     def _get_action(self, observation, c, is_training=True):
         # Action + random gaussian noise (as recommended in spining up)
-        action = 0.3*self._actor(self._as_tensor(self._flatten_dict(observation)))
+        action = self._actor(self._as_tensor(self._flatten_dict(observation)))
         if is_training:
             action += self._config.action_noise_range * torch.randn(self._env.action_space.shape)
 
@@ -257,7 +257,6 @@ class DDPG:
         step_trained_on = 0
         violations = 0
         collisions = 0
-        total_collisions = 0
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
@@ -298,7 +297,6 @@ class DDPG:
 
             if self._env._did_agent_collide():
                 collisions += 1
-                total_collisions += 1
 
             observation = observation_next
             c = self._env.get_constraint_values()
@@ -329,7 +327,6 @@ class DDPG:
                 episode_reward = 0
                 episode_length = 0
                 violations = 0
-                collisions = 0
 
             # Check if the epoch is over
             if step != 0 and step % self._config.steps_per_epoch == 0: 
@@ -356,9 +353,9 @@ class DDPG:
         print("==========================================================")
         print(f"Finished DDPG training. Time spent: {(time.time() - start_time) // 1} secs")
         print("==========================================================")
-        print(f"Number of collisions : {total_collisions}")
+        print(f"Number of collisions : {collisions}")
 
-        self._writer.add_scalar("total_collisions", total_collisions, 0)
+        self._writer.add_scalar("total_collisions", collisions, 0)
 
         self._actor.save(output_folder)
         self._critic.save(output_folder)

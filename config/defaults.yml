@@ -69,6 +69,8 @@ arguments:
             default: false
           - name: "reward_shaping_slack"
             default: 0.1
+          - name: "action_scale"
+            default: 0.3
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:

@@ -83,7 +83,10 @@ class Trainer:
         observation_dim = (seq(env.observation_space.spaces.values())
                             .map(lambda x: x.shape[0])
                             .sum())
-        actor = Actor(observation_dim, env.action_space.shape[0], actor_model_file)
+        
+        action_scale = env._action_scale
+
+        actor = Actor(observation_dim, env.action_space.shape[0], action_scale, actor_model_file)
         critic = Critic(observation_dim, env.action_space.shape[0], critic_model_file)
 
         safe_action_func = safety_layer.get_safe_action if safety_layer else None
