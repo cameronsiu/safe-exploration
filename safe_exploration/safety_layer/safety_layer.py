@@ -119,7 +119,7 @@ class SafetyLayer:
                             torch.bmm(x.view(x.shape[0], 1, -1), action.view(action.shape[0], -1, 1)).view(-1) \
                             for i, x in enumerate(gs)]
         losses = [torch.mean((c_next[:, i] - c_next_predicted[i]) ** 2) for i in range(self._num_constraints)]
-        
+
         return losses
 
     def _update_batch(self, batch):
@@ -164,7 +164,7 @@ class SafetyLayer:
         g = [x(o) for i, x in enumerate(self._models)]
         self._train_mode()
 
-        # Fidn the lagrange multipliers
+        # Find the lagrange multipliers
         g = [x.data.numpy().reshape(-1) for x in g]
 
         #g = [
@@ -200,6 +200,7 @@ class SafetyLayer:
         print(f"Start time: {datetime.fromtimestamp(start_time)}")
         print("==========================================================")
 
+        print(f"Safety Layer Tensorboard folder: {self._writer.logdir}")
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
@@ -231,7 +232,7 @@ class SafetyLayer:
             print(f"Finished epoch {epoch} with losses: {losses}. Running validation ...")
             self.evaluate()
             print("----------------------------------------------------------")
-        
+
         self._writer.close()
         print("==========================================================")
         print(f"Finished training constraint model. Time spent: {(time.time() - start_time) // 1} secs")

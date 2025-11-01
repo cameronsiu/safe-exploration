@@ -11,11 +11,13 @@ class Net(Module):
                  layer_dims,
                  init_bound,
                  initializer,
-                 last_activation):
+                 last_activation,
+                 action_scale=None):
         super(Net, self).__init__()
 
         self._initializer = initializer
         self._last_activation = last_activation
+        self._action_scale = action_scale
 
         _layer_dims = [in_dim] + layer_dims + [out_dim]
         self._layers = ModuleList(seq(_layer_dims[:-1])
@@ -43,5 +45,8 @@ class Net(Module):
             out = self._last_activation(self._layers[-1](out))
         else:
             out = self._layers[-1](out)
+
+        if self._action_scale is not None:
+            out = self._action_scale * out
 
         return out
