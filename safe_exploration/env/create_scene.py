@@ -1,144 +1,212 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
-# All rights reserved.
-#
+# Copyright (c) 2022-2025
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""This script demonstrates how to use the interactive scene interface to setup a scene with multiple prims.
-
-.. code-block:: bash
-
-    # Usage
-    ./isaaclab.sh -p scripts/tutorials/02_scene/create_scene.py --num_envs 32
-
-"""
-
-"""Launch Isaac Sim Simulator first."""
-
-
 import argparse
-
 from isaaclab.app import AppLauncher
 
-# add argparse arguments
-parser = argparse.ArgumentParser(description="Tutorial on using the interactive scene interface.")
+parser = argparse.ArgumentParser(description="Interactive scene with PhysX LiDAR + IMU printing (multi-env).")
 parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to spawn.")
-# append AppLauncher cli args
+parser.add_argument("--usd_path", type=str, default="/localhome/tea21/Desktop/environment_without_people.usd", help="USD to spawn per env")
 AppLauncher.add_app_launcher_args(parser)
-# parse the arguments
 args_cli = parser.parse_args()
 
-# launch omniverse app
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-"""Rest everything follows."""
-
-import torch
-
+# ---------------- Imports ----------------
+import numpy as np
 import carb
+import omni
 
 import isaaclab.sim as sim_utils
-from isaaclab.assets import ArticulationCfg, AssetBaseCfg
+from isaaclab.assets import AssetBaseCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sim import SimulationContext
 from isaaclab.utils import configclass
 from isaaclab.sim.spawners.from_files import UsdFileCfg
 
-##
-# Pre-defined configs
-##
-from isaaclab_assets import CARTPOLE_CFG  # isort:skip
+from isaacsim.sensors.physx import _range_sensor  # PhysX LiDAR interface
+
+# IMU wrapper (physics IMU). If unavailable in your version, we still run (IMU skipped).
+try:
+    from isaacsim.sensors.physics import IMUSensor
+    HAS_IMU_WRAPPER = True
+except Exception as _e:
+    carb.log_warn(f"[IMU] IMU wrapper not available: {_e}")
+    HAS_IMU_WRAPPER = False
+
+# ---------------- USER EDITS ----------------
+# These are relative to each env namespace, i.e., resolved as:
+# /World/envs/env_0/<REL_*_PATH>, /World/envs/env_1/<REL_*_PATH>, ...
+REL_LIDAR_PATH = "Environment/turtlebot/turtlebot3_burger/Lidar"       # <-- edit to match your stage
+REL_IMU_PATH   = "Environment/turtlebot/turtlebot3_burger/Imu_Sensor"  # <-- edit or leave empty "" if none
+# -------------------------------------------
+
+# Optional: physics GPU settings
 my_setting = carb.settings.get_settings()
-my_character_script_path = "/localhome/tea21/Desktop/commands.txt"
-character_behavior_path = "/exts/isaacsim/replicator/agent/behavior_script_settings/behavior_script_path"
-my_setting.set(character_behavior_path, my_character_script_path)
+my_setting.set("/physics/use_gpu", True)
+my_setting.set("/physics/cudaDevice", 0)
+my_setting.set("/physics/tensors/device", 0)
+my_setting.set("/physics/use_gpu_pipeline", True)
 
 @configclass
-class CartpoleSceneCfg(InteractiveSceneCfg):
-    """Configuration for a cart-pole scene."""
-
-    # ground plane
-    ground = AssetBaseCfg(prim_path="/World/defaultGroundPlane", spawn=sim_utils.GroundPlaneCfg())
-
-    # lights
-    dome_light = AssetBaseCfg(
-        prim_path="/World/Light", spawn=sim_utils.DomeLightCfg(intensity=3000.0, color=(0.75, 0.75, 0.75))
-    )
-
-    # articulation
-    cartpole: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+class MySceneCfg(InteractiveSceneCfg):
+    """Loads your USD asset once per env (USES ENV REGEX TOKEN!)."""
     my_asset: AssetBaseCfg = AssetBaseCfg(
-        prim_path="/World/Environment",
-        init_state=AssetBaseCfg.InitialStateCfg(pos=[0.0, 0.0, 0.0], rot=[1.0, 0.0, 0.0, 0.0]),
-        spawn=UsdFileCfg(usd_path="/localhome/tea21/Desktop/people.usd"),
+        prim_path="{ENV_REGEX_NS}/Environment",   # <-- THIS is the correct way for multi-env
+        init_state=AssetBaseCfg.InitialStateCfg(
+            pos=[0.0, 0.0, 0.0], rot=[1.0, 0.0, 0.0, 0.0]
+        ),
+        spawn=UsdFileCfg(usd_path=args_cli.usd_path),
     )
 
+# ---------------- Path helpers ----------------
+def _normalize_rel(rel_path: str) -> str:
+    """Ensure sensor paths are relative to env root (strip any accidental /World/...)."""
+    if not rel_path:
+        return rel_path
+    rel = rel_path.lstrip("/")  # strip leading slash
+    if rel.startswith("World/"):
+        rel = rel[len("World/"):]
+    return rel
 
+def build_paths(num_envs: int, rel_path: str):
+    rel = _normalize_rel(rel_path)
+    return [f"/World/envs/env_{i}/{rel}" for i in range(num_envs)]
+
+def prim_exists(path: str) -> bool:
+    stage = omni.usd.get_context().get_stage()
+    prim = stage.GetPrimAtPath(path)
+    return bool(prim and prim.IsValid())
+
+def list_candidates(substr: str):
+    """List prim paths whose name contains 'substr' (case-insensitive)."""
+    stage = omni.usd.get_context().get_stage()
+    hits = []
+    for prim in stage.Traverse():
+        if substr.lower() in prim.GetName().lower():
+            hits.append(prim.GetPath().pathString)
+    return hits
+
+# ---------------- Main loop ----------------
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
-    """Runs the simulation loop."""
-    # Extract scene entities
-    # note: we only do this here for readability.
-    robot = scene["cartpole"]
-    my_setting = carb.settings.get_settings()
-    # Define simulation stepping
-    sim_dt = sim.get_physics_dt()
-    count = 0
-    # Simulation loop
-    while simulation_app.is_running():
-        # Reset
-        if count % 500 == 0:
-            # reset counter
-            count = 0
-            # reset the scene entities
-            # root state
-            # we offset the root state by the origin since the states are written in simulation world frame
-            # if this is not done, then the robots will be spawned at the (0, 0, 0) of the simulation world
-            root_state = robot.data.default_root_state.clone()
-            root_state[:, :3] += scene.env_origins
-            robot.write_root_pose_to_sim(root_state[:, :7])
-            robot.write_root_velocity_to_sim(root_state[:, 7:])
-            # set joint positions with some noise
-            joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
-            joint_pos += torch.rand_like(joint_pos) * 0.1
-            robot.write_joint_state_to_sim(joint_pos, joint_vel)
-            # clear internal buffers
-            scene.reset()
-            print("[INFO]: Resetting robot state...")
-        # Apply random action
-        # -- generate random joint efforts
-        efforts = torch.randn_like(robot.data.joint_pos) * 5.0
-        # -- apply action to the robot
-        robot.set_joint_effort_target(efforts)
-        # -- write data to sim
-        scene.write_data_to_sim()
-        # Perform step
-        sim.step()
-        # Increment counter
-        count += 1
-        # Update buffers
-        scene.update(sim_dt)
+    # Interfaces/wrappers
+    lidar_if = _range_sensor.acquire_lidar_sensor_interface()
 
+    # Build per-env sensor paths (relative → absolute under each env)
+    lidar_paths = build_paths(args_cli.num_envs, REL_LIDAR_PATH)
+    imu_paths   = build_paths(args_cli.num_envs, REL_IMU_PATH) if REL_IMU_PATH else []
+
+    # Verify prim existence and help user adjust if needed
+    missing_lidar = [p for p in lidar_paths if not prim_exists(p)]
+    if missing_lidar:
+        print("[LiDAR] Expected LiDAR prims not found:")
+        for p in missing_lidar:
+            print("   -", p)
+        cands = list_candidates("lidar")
+        if cands:
+            print("[LiDAR] Candidates found in stage:")
+            for c in cands:
+                print("   •", c)
+            print("[LiDAR] Set REL_LIDAR_PATH so /World/envs/env_0/<REL_LIDAR_PATH> matches one of these.")
+        else:
+            print("[LiDAR] No 'lidar' candidates found. Ensure your USD contains a **PhysX** LiDAR prim.")
+
+    # Bind IMU wrappers (best effort)
+    imus = {}
+    if HAS_IMU_WRAPPER and imu_paths:
+        missing_imu = [p for p in imu_paths if not prim_exists(p)]
+        if missing_imu:
+            print("[IMU] Expected IMU prims not found:")
+            for p in missing_imu:
+                print("   -", p)
+            cands = list_candidates("imu")
+            if cands:
+                print("[IMU] Candidates found in stage:")
+                for c in cands:
+                    print("   •", c)
+                print("[IMU] Set REL_IMU_PATH so /World/envs/env_0/<REL_IMU_PATH> matches one of these.")
+
+        for p in imu_paths:
+            if prim_exists(p):
+                try:
+                    # frequency=None → use sim tick; read_gravity set at query
+                    imus[p] = IMUSensor(prim_path=p, name=f"imu_{p.split('/')[-2]}", frequency=None)
+                except Exception as e:
+                    carb.log_warn(f"[IMU] Failed to wrap IMU at {p}: {e}")
+
+    scan_counter = 0
+    step_counter = 0
+
+    while simulation_app.is_running():
+        # Write & step
+        scene.write_data_to_sim()
+        sim.step()
+        scan_counter += 1
+        step_counter += 1
+
+        # ------------ Print every 10 scans ------------
+        if scan_counter % 10 == 0:
+            # LiDAR summary
+            for p in lidar_paths:
+                if not prim_exists(p):
+                    continue  # avoid "Sensor does not exist"
+                try:
+                    ranges = lidar_if.get_linear_depth_data(p)  # numpy array of meters
+                    if ranges is None or len(ranges) == 0:
+                        print(f"[LiDAR] scan {scan_counter:05d} | {p} | no data")
+                    else:
+                        # print(f"[LiDAR] scan {scan_counter:05d} | {p} | rays={len(ranges)} | "
+                        #       f"min={float(np.min(ranges)):.3f} m | max={float(np.max(ranges)):.3f} m")
+                        print(ranges)
+                        # To dump full array each time, uncomment:
+                        # print(ranges)
+                except Exception as e:
+                    print(f"[LiDAR] scan {scan_counter:05d} | {p} | error: {e}")
+
+            # IMU summary (if available)
+            if imus:
+                for p, imu in imus.items():
+                    try:
+                        frame = imu.get_current_frame(read_gravity=True)  # includes gravity in lin_acc
+                        if not frame:
+                            print(f"[IMU]   scan {scan_counter:05d} | {p} | no data")
+                            continue
+                        # la = np.asarray(frame.get("lin_acc", [0, 0, 0]), dtype=float)
+                        # av = np.asarray(frame.get("ang_vel", [0, 0, 0]), dtype=float)
+                        # ori = np.asarray(frame.get("orientation", [0, 0, 0, 1]), dtype=float)
+                        # print(
+                        #     f"[IMU]   scan {scan_counter:05d} | {p} | "
+                        #     f"lin_acc=({la[0]:+.3f},{la[1]:+.3f},{la[2]:+.3f}) m/s^2 | "
+                        #     f"ang_vel=({av[0]:+.3f},{av[1]:+.3f},{av[2]:+.3f}) rad/s | "
+                        #     f"q=({ori[0]:+.3f},{ori[1]:+.3f},{ori[2]:+.3f},{ori[3]:+.3f})"
+                        # )
+                        print(frame)
+                    except Exception as e:
+                        print(f"[IMU]   scan {scan_counter:05d} | {p} | error: {e}")
+
+        # Optional: periodic scene reset
+        if step_counter % 500 == 0:
+            step_counter = 0
+            scene.reset()
+            print("[INFO]: Resetting scene...")
 
 def main():
-    """Main function."""
-    # Load kit helper
-    sim_cfg = sim_utils.SimulationCfg(device=args_cli.device)
+    sim_cfg = sim_utils.SimulationCfg(device="cuda:0")
     sim = SimulationContext(sim_cfg)
-    # Set main camera
+
+    # Camera
     sim.set_camera_view([2.5, 0.0, 4.0], [0.0, 0.0, 2.0])
-    # Design scene
-    scene_cfg = CartpoleSceneCfg(num_envs=args_cli.num_envs, env_spacing=2.0)
+
+    # Build scene with multiple envs; spacing so envs don't collide
+    scene_cfg = MySceneCfg(num_envs=args_cli.num_envs, env_spacing=40.0)
     scene = InteractiveScene(scene_cfg)
-    # Play the simulator
+
     sim.reset()
-    # Now we are ready!
     print("[INFO]: Setup complete...")
-    # Run the simulator
+
     run_simulator(sim, scene)
 
-
 if __name__ == "__main__":
-    # run the main function
     main()
-    # close sim app
     simulation_app.close()
