@@ -33,3 +33,5 @@ python3 -m safe_exploration.main --main_trainer_test
 ```
 sudo chown -R $(id -u):$(id -g) ~/docker/isaac-sim
 ```
+
+1. Open `people.usd`
