@@ -23,7 +23,7 @@
   "workspaceFolder": "/workspace/safe-exploration",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/safe-exploration,type=bind",
   "remoteUser": "root",
-  "updateRemoteUserUID": true,
+  "updateRemoteUserUID": false,
   "settings": {
     "terminal.integrated.shell.linux": "/bin/bash"
   },

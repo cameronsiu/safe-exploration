@@ -19,9 +19,6 @@ RUN apt-get update && \
 # (Optional) Allow root user passwordless sudo (Isaac Lab uses root by default)
 RUN echo "root ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
-# Set working directory to the Isaac Lab workspace
-WORKDIR /root/isaac-lab
-
 # Enable git autocompletion for bash
 RUN echo 'if [ -f /usr/share/bash-completion/completions/git ]; then . /usr/share/bash-completion/completions/git; fi' >> ~/.bashrc
 
