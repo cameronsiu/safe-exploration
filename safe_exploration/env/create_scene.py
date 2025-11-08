@@ -5,7 +5,7 @@ import argparse
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="Interactive scene with PhysX LiDAR + GT pose/velocity (multi-env).")
-parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to spawn.")
+parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to spawn.")
 parser.add_argument("--usd_path", type=str, default="/localhome/tea21/Desktop/environment_without_people.usd", help="USD to spawn per env")
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -43,17 +43,15 @@ my_setting.set("/physics/tensors/device", 0)
 my_setting.set("/physics/use_gpu_pipeline", True)
 
 @configclass
-class MySceneCfg(InteractiveSceneCfg):
-    """Loads your USD asset once per env (USES ENV REGEX TOKEN!)."""
+class ObstacleAvoidCfg(InteractiveSceneCfg):
     my_asset: AssetBaseCfg = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/Environment",   # <-- correct pattern for multi-env
+        prim_path="{ENV_REGEX_NS}/Environment",
         init_state=AssetBaseCfg.InitialStateCfg(
-            pos=[0.0, 0.0, 0.0], rot=[1.0, 0.0, 0.0, 0.0]
+            pos=(0.0, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0)
         ),
         spawn=UsdFileCfg(usd_path=args_cli.usd_path),
     )
 
-# ---------------- Path helpers ----------------
 def _normalize_rel(rel_path: str) -> str:
     """Ensure sensor/rigid-body paths are relative to env root (strip leading /World/...)."""
     if not rel_path:
@@ -205,7 +203,7 @@ def main():
     sim.set_camera_view([2.5, 0.0, 4.0], [0.0, 0.0, 2.0])
 
     # Build scene with multiple envs; spacing so envs don't collide
-    scene_cfg = MySceneCfg(num_envs=args_cli.num_envs, env_spacing=40.0)
+    scene_cfg = ObstacleAvoidCfg(num_envs=args_cli.num_envs, env_spacing=40.0)
     scene = InteractiveScene(scene_cfg)
 
     sim.reset()
