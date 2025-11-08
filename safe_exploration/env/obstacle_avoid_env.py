@@ -15,42 +15,155 @@ simulation_app = app_launcher.app
 
 # ---------------- Imports ----------------
 import numpy as np
+import torch
 import carb
 import omni
+from collections.abc import Sequence
 
 import isaaclab.sim as sim_utils
-from isaaclab.assets import AssetBaseCfg
-from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
+from isaaclab.scene import InteractiveScene
 from isaaclab.sim import SimulationContext
 from isaaclab.utils import configclass
-from isaaclab.sim.spawners.from_files import UsdFileCfg
+from isaaclab.managers import ObservationGroupCfg as ObsGroup
+from isaaclab.managers import ObservationTermCfg as ObsTerm
+from isaaclab.envs import DirectRLEnv
 
-from isaacsim.sensors.physx import _range_sensor  # PhysX LiDAR interface
-from pxr import UsdGeom, Gf, UsdPhysics, Usd      # for GT pose/velocity
+from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
-# ---------------- USER EDITS ----------------
-# These are relative to each env namespace, resolved as:
-# /World/envs/env_0/<REL_*_PATH>, /World/envs/env_1/<REL_*_PATH>, ...
-REL_LIDAR_PATH = "Environment/turtlebot/turtlebot3_burger/Lidar"            # <-- edit to match your stage
-REL_BASE_PATH  = "Environment/turtlebot/turtlebot3_burger/base_footprint"   # <-- set to your TurtleBot rigid body prim (base_link/base_footprint)
-# -------------------------------------------
 
-# Optional: physics GPU settings
+from isaaclab.assets import Articulation
+
+from isaacsim.sensors.physx import _range_sensor
+from pxr import UsdGeom, Gf, UsdPhysics, Usd
+
+# cameron: please don't use relative imports
+from .obstacle_avoid_env_cfg import ObstacleAvoidEnvCfg
+
+
+REL_LIDAR_PATH = "env.*/turtlebot/turtlebot3_burger/Lidar"            
+REL_BASE_PATH  = "env.*/turtlebot/turtlebot3_burger/base_footprint"
+
 my_setting = carb.settings.get_settings()
 my_setting.set("/physics/use_gpu", True)
 my_setting.set("/physics/cudaDevice", 0)
 my_setting.set("/physics/tensors/device", 0)
 my_setting.set("/physics/use_gpu_pipeline", True)
 
+# https://isaac-sim.github.io/IsaacLab/main/source/tutorials/03_envs/create_manager_base_env.html
+# @configclass
+# class ActionsCFG:
+#     velocity_commands = mdp.
+
 @configclass
-class ObstacleAvoidCfg(InteractiveSceneCfg):
-    my_asset: AssetBaseCfg = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/Environment",
-        init_state=AssetBaseCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0)
-        ),
-        spawn=UsdFileCfg(usd_path=args_cli.usd_path),
+class ObservationsCfg:
+
+    @configclass
+    class PolicyCfg(ObsGroup):
+
+        agent_position = ObsTerm()
+        lidar_values = ObsTerm()
+        target_position = ObsTerm()
+
+        # cameron What do these do?
+        def __post_init__(self) -> None:
+            self.enable_corruption = False
+            self.concatenate_terms = True
+
+    # Why structured like this?
+    policy: PolicyCfg = PolicyCfg()
+
+# @configclass
+# class EventCfg:
+#     reset_turtlebot_position = EventTerm(
+#         mode="reset",
+#         params={
+#         }
+#     )
+
+
+# NOTE: What is the difference between DirectRLEnvCFG and ManagerBasedEnvCFG?
+@configclass
+class ObstacleAvoidEnv(DirectRLEnv):
+    cfg: ObstacleAvoidEnvCfg
+
+    def __init__(self, cfg: ObstacleAvoidEnvCfg, render_mode: str | None = None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+        
+        self.dof_idx, _ = self.robot.find_joints(self.cfg.dof_names)
+
+    def _setup_scene(self):
+        self.robot = Articulation(self.cfg.robot_cfg)
+
+        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
+        self.scene.articulations["robot"] = self.robot
+
+        light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
+        light_cfg.func("/World/Light", light_cfg)
+
+        self.visualization_markers = define_markers()
+
+        self.up_dir = torch.tensor([0.0, 0.0, 1.0]).cuda()
+        self.yaws = torch.zeros((self.cfg.scene.num_envs, 1)).cuda()
+        self.commands = torch.randn((self.cfg.scene.num_envs, 3)).cuda()
+        self.commands[:, -1] = 0.0
+        self.commands = self.commands/torch.linalg.norm(self.commands, dim=1, keepdim=True)
+
+        ratio = self.commands[:, 1]/(self.commands[:,0]+1E-8)
+
+    def _pre_physics_step(self, actions: torch.Tensor) -> None:
+        # actions shape [num_envs, num_actions]
+        self.actions = actions.clone()
+
+    def _apply_action(self) -> None:
+        self.robot.set_joint_velocity_target(self.actions, joint_ids=self.dof_idx)
+
+    def _get_observations(self) -> dict:
+        # self.robot is an Articulation
+        # self.robot.data is an ArticulationData
+        # ArticulationData contains all cloned robots
+        self.velocity = self.robot.data.root_com_lin_vel_b
+        observations = {"policy": self.velocity}
+        return observations
+    
+    def _get_rewards(self) -> torch.Tensor:
+        total_reward = torch.linalg.norm(self.velocity, dim=-1, keepdim=True)
+        return total_reward
+    
+    def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
+        time_out = self.episode_length_buf >= self.max_episode_length - 1
+
+        return False, time_out
+    
+    def _reset_idx(self, env_ids: Sequence[int] | None):
+        if env_ids is None:
+            env_ids = self.robot._ALL_INDICES
+        super()._reset_idx(env_ids)
+
+        default_root_state = self.robot.data.default_root_state[env_ids]
+        default_root_state[:, :3] += self.scene.env_origins[env_ids]
+
+        self.robot.write_root_state_to_sim(default_root_state, env_ids)
+
+def define_markers() -> VisualizationMarkers:
+    marker_cfg = VisualizationMarkersCfg(
+        prim_path="/Visuals/myMarkers",
+        markers={
+            "forward": sim_utils.UsdFileCfg(
+                usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
+                scale=(0.25, 0.25, 0.5),
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),
+            ),
+            "command": sim_utils.UsdFileCfg(
+                usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
+                scale=(0.25, 0.25, 0.5),
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0))
+            ),
+        },
     )
+    return VisualizationMarkers(cfg=marker_cfg)
+
 
 def _normalize_rel(rel_path: str) -> str:
     """Ensure sensor/rigid-body paths are relative to env root (strip leading /World/...)."""
@@ -164,11 +277,13 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
                 try:
                     ranges = lidar_if.get_linear_depth_data(p)
                     if ranges is None or len(ranges) == 0:
-                        print(f"[LiDAR] scan {scan_counter:05d} | {p} | no data")
+                        #print(f"[LiDAR] scan {scan_counter:05d} | {p} | no data")
+                        pass
                     else:
-                        print(f"[LiDAR] scan {scan_counter:05d} | {p} | rays={len(ranges)} | "
-                              f"min={float(np.min(ranges)):.3f} m | max={float(np.max(ranges)):.3f} m")
-                        # print(ranges)  # uncomment to dump full array
+                        # print(f"[LiDAR] scan {scan_counter:05d} | {p} | rays={len(ranges)} | "
+                        #       f"min={float(np.min(ranges)):.3f} m | max={float(np.max(ranges)):.3f} m")
+                        #print(ranges.shape)  # uncomment to dump full array
+                        pass
                 except Exception as e:
                     print(f"[LiDAR] scan {scan_counter:05d} | {p} | error: {e}")
 
@@ -179,15 +294,17 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
                 pos, quat = get_world_pose(stage, p)
                 lin, ang  = get_world_vel(stage, p)
                 if pos is None or lin is None:
-                    print(f"[GT]    scan {scan_counter:05d} | {p} | no data (check that prim is a RigidBody)")
+                    # print(f"[GT]    scan {scan_counter:05d} | {p} | no data (check that prim is a RigidBody)")
+                    pass
                 else:
-                    print(
-                        f"[GT]    scan {scan_counter:05d} | {p} | "
-                        f"pos=({pos[0]:+.3f},{pos[1]:+.3f},{pos[2]:+.3f}) m | "
-                        f"lin_vel=({lin[0]:+.3f},{lin[1]:+.3f},{lin[2]:+.3f}) m/s | "
-                        f"ang_vel=({ang[0]:+.3f},{ang[1]:+.3f},{ang[2]:+.3f}) rad/s | "
-                        f"quat=({quat[0]:+.3f},{quat[1]:+.3f},{quat[2]:+.3f},{quat[3]:+.3f})"
-                    )
+                    # print(
+                    #     f"[GT]    scan {scan_counter:05d} | {p} | "
+                    #     f"pos=({pos[0]:+.3f},{pos[1]:+.3f},{pos[2]:+.3f}) m | "
+                    #     f"lin_vel=({lin[0]:+.3f},{lin[1]:+.3f},{lin[2]:+.3f}) m/s | "
+                    #     f"ang_vel=({ang[0]:+.3f},{ang[1]:+.3f},{ang[2]:+.3f}) rad/s | "
+                    #     f"quat=({quat[0]:+.3f},{quat[1]:+.3f},{quat[2]:+.3f},{quat[3]:+.3f})"
+                    # )
+                    pass
 
         # Optional: periodic scene reset
         if step_counter % 500 == 0:
@@ -200,7 +317,7 @@ def main():
     sim = SimulationContext(sim_cfg)
 
     # Camera
-    sim.set_camera_view([2.5, 0.0, 4.0], [0.0, 0.0, 2.0])
+    sim.set_camera_view((2.5, 0.0, 4.0), (0.0, 0.0, 2.0))
 
     # Build scene with multiple envs; spacing so envs don't collide
     scene_cfg = ObstacleAvoidCfg(num_envs=args_cli.num_envs, env_spacing=40.0)
