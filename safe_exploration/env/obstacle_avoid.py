@@ -31,18 +31,16 @@ class ObstacleAvoid(gym.Env):
         })
 
         # Sets all the episode specific variables
-        self._obstacles = np.array([
+        # X, Y, W, H
+        self._fixed_obstacles = np.array([
             # Walls around border
             [-1, 0, 1.02, 1],
             [0.98, 0, 1, 1],
             [-1, -1, 3, 1.02],
             [-1, 0.98, 3, 1],
-
-            # Obstacles inside
-            [0.0,  0.45, 0.20, 0.1],
-            [0.4, 0.45, 0.20, 0.1],
-            [0.8, 0.45, 0.20, 0.1]
         ])
+
+        self._changing_obstacles = np.array([])
 
         self._step_timestamp = time.time()
         self.reset()
@@ -50,6 +48,9 @@ class ObstacleAvoid(gym.Env):
         self.window = None
         self.clock = None
         self.window_size = 1024
+
+    def _get_obstacles(self):
+        return np.concat([self._fixed_obstacles, self._changing_obstacles], axis=0)
 
     def _make_lidar_directions(self, number_of_rays):
         lidar_directions = np.zeros((number_of_rays, 2))
@@ -143,16 +144,13 @@ class ObstacleAvoid(gym.Env):
         
         
     def reset(self):
-        agent_position = np.random.random(2)
-        target_position = np.random.random(2)
-        agent_on_top = np.random.random(1)[0] > 0.5
+        
+        self._reset_obstacle_positions()
+        self._reset_agent_position()
+        while self._did_agent_collide():
+            self._reset_agent_position()
 
-        if agent_on_top:
-            self._agent_position = np.array([0.1, 0.9]) + agent_position * np.array([0.8, -0.25])
-            self._target_position = np.array([0.1, 0.1]) + target_position * np.array([0.8, 0.25])
-        else:
-            self._agent_position = np.array([0.1, 0.1]) + agent_position * np.array([0.8, 0.25])
-            self._target_position = np.array([0.1, 0.9]) + target_position * np.array([0.8, -0.25])
+        self._reset_target_location()
 
         self._current_time = 0.
 
@@ -161,14 +159,31 @@ class ObstacleAvoid(gym.Env):
 
         return self.step(np.zeros(2))[0]
     
+    def _reset_obstacle_positions(self):
+        num_obstacles = 20
+        scale = np.tile([0.8, 0.8], (num_obstacles, 1))
+        origin = np.tile([0.1, 0.1], (num_obstacles, 1))
+        positions = np.random.random((num_obstacles, 2)) * scale + origin
+        sizes = np.tile([0.05, 0.05], (num_obstacles, 1))
+        self._changing_obstacles = np.concat([positions, sizes], axis=1)
+
+    def _reset_agent_position(self):
+        agent_position = np.random.random(2)
+        agent_on_top = np.random.random(1)[0] > 0.5
+
+        if agent_on_top:
+            self._agent_position = np.array([0.1, 0.9]) + agent_position * np.array([0.8, -0.15])
+        else:
+            self._agent_position = np.array([0.1, 0.1]) + agent_position * np.array([0.8, 0.15])
+    
     def _reset_target_location(self):
         agent_on_top = self._agent_position[1] > 0.5
         target_position = np.random.random(2)
 
         if agent_on_top:
-            self._target_position = np.array([0.1, 0.1]) + target_position * np.array([0.8, 0.25])
+            self._target_position = np.array([0.1, 0.1]) + target_position * np.array([0.8, 0.15])
         else:
-            self._target_position = np.array([0.1, 0.8]) + target_position * np.array([0.8, -0.25])
+            self._target_position = np.array([0.1, 0.8]) + target_position * np.array([0.8, -0.15])
     
     def _get_reward(self, initial_position, final_position, action):
         if self._config.enable_reward_shaping and self._is_agent_outside_shaping_boundary():
@@ -188,7 +203,7 @@ class ObstacleAvoid(gym.Env):
     def _did_agent_collide(self):
         collide_with_obstacle = np.any(self.point_in_boxes(
             self._agent_position,
-            self._obstacles
+            self._get_obstacles()
         ))
 
         return collide_with_obstacle
@@ -223,7 +238,7 @@ class ObstacleAvoid(gym.Env):
         else:
             number_of_lidars = self._lidar_directions.shape[0]
             agent_positions = np.tile(self._agent_position, reps=(number_of_lidars,1))
-            lidar_distances = self.ray_aabb2d_distances(agent_positions, self._lidar_directions, self._obstacles)
+            lidar_distances = self.ray_aabb2d_distances(agent_positions, self._lidar_directions, self._get_obstacles())
             distances_per_bucket = int(lidar_distances.shape[0] / self._num_lidar_buckets)
             self._lidar_readings = np.array([np.min(lidar_distances[i:i+distances_per_bucket]) for i in range(0, lidar_distances.shape[0], distances_per_bucket)])
             self._lidar_measure_time = self._current_time
@@ -295,8 +310,9 @@ class ObstacleAvoid(gym.Env):
             10,
         )
 
-        for obstacle_idx in range(self._obstacles.shape[0]):
-            obstacle = self._obstacles[obstacle_idx]
+        obstacles = self._get_obstacles()
+        for obstacle_idx in range(obstacles.shape[0]):
+            obstacle = obstacles[obstacle_idx]
             obstacle_screen_scale = obstacle * self.window_size
 
             pygame.draw.rect(
