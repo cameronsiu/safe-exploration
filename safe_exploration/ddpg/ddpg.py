@@ -270,11 +270,12 @@ class DDPG:
                 pass
 
             sim_start = time.time()
+            starting = step < self._config.start_steps
             # Randomly sample episode_ for some initial steps
-            action = self._env.action_space.sample() if step < self._config.start_steps \
+            action = self._env.action_space.sample() if starting \
                      else self._get_action(observation, c)
             
-            if step > self._config.start_steps and self._render_training:
+            if self._render_training and not starting:
                 self._env.render_env()
             
             observation_next, reward, done, _ = self._env.step(action)

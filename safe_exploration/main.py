@@ -91,7 +91,7 @@ class Trainer:
         if not self._config.test:
             ddpg.train(self._config.output_folder)
         else:
-            ddpg.evaluate()
+            ddpg.evaluate(False)
 
 
 if __name__ == '__main__':

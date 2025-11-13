@@ -38,9 +38,9 @@ class ObstacleAvoid(gym.Env):
             [-1, 0.98, 3, 1],
 
             # Obstacles inside
-            [0.0,  0.45, 0.20, 0.1],
-            [0.4, 0.45, 0.20, 0.1],
-            [0.8, 0.45, 0.20, 0.1]
+            #[0.0,  0.45, 0.20, 0.1],
+            #[0.4, 0.45, 0.20, 0.1],
+            #[0.8, 0.45, 0.20, 0.1]
         ])
 
         self._step_timestamp = time.time()
@@ -48,7 +48,7 @@ class ObstacleAvoid(gym.Env):
 
         self.window = None
         self.clock = None
-        self.window_size = 1024
+        self.window_size = 750
 
     def _make_lidar_directions(self, number_of_rays):
         lidar_directions = np.zeros((number_of_rays, 2))
@@ -204,6 +204,8 @@ class ObstacleAvoid(gym.Env):
                np.random.normal(0, self._config.target_noise_std, 2)
     
     def get_num_constraints(self):
+        # return self._lidar_directions.shape[0]
+        return 1
         # return self._lidar_directions.shape[0]
         return 1
 
