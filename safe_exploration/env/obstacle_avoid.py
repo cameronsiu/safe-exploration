@@ -41,6 +41,8 @@ class ObstacleAvoid(gym.Env):
         ])
 
         self._changing_obstacles = np.array([])
+        self._moving_obstacles = np.array([])
+        self._moving_obstacle_directions = []
 
         self._step_timestamp = time.time()
         self.reset()
@@ -50,7 +52,7 @@ class ObstacleAvoid(gym.Env):
         self.window_size = 1024
 
     def _get_obstacles(self):
-        return np.concat([self._fixed_obstacles, self._changing_obstacles], axis=0)
+        return np.concat([self._fixed_obstacles, self._changing_obstacles, self._moving_obstacles], axis=0)
 
     def _make_lidar_directions(self, number_of_rays):
         lidar_directions = np.zeros((number_of_rays, 2))
@@ -146,6 +148,7 @@ class ObstacleAvoid(gym.Env):
     def reset(self):
         
         self._reset_obstacle_positions()
+        self._reset_moving_obstacle_positions()
         self._reset_agent_position()
         while self._did_agent_collide():
             self._reset_agent_position()
@@ -166,6 +169,15 @@ class ObstacleAvoid(gym.Env):
         positions = np.random.random((num_obstacles, 2)) * scale + origin
         sizes = np.tile([0.05, 0.05], (num_obstacles, 1))
         self._changing_obstacles = np.concat([positions, sizes], axis=1)
+
+    def _reset_moving_obstacle_positions(self):
+        num_obstacles = 5
+        scale = np.tile([0.8, 0.8], (num_obstacles, 1))
+        origin = np.tile([0.1, 0.1], (num_obstacles, 1))
+        positions = np.random.random((num_obstacles, 2)) * scale + origin
+        sizes = np.tile([0.05, 0.05], (num_obstacles, 1))
+        self._moving_obstacles = np.concat([positions, sizes], axis=1)
+        self._moving_obstacle_directions = [1] * num_obstacles
 
     def _reset_agent_position(self):
         agent_position = np.random.random(2)
@@ -243,6 +255,18 @@ class ObstacleAvoid(gym.Env):
             self._lidar_readings = np.array([np.min(lidar_distances[i:i+distances_per_bucket]) for i in range(0, lidar_distances.shape[0], distances_per_bucket)])
             self._lidar_measure_time = self._current_time
             return self._lidar_readings
+        
+    def _move_obstacles(self):
+        for obstacle_idx in range(self._moving_obstacles.shape[0]):
+            obstacle_y = self._moving_obstacles[obstacle_idx, 1]
+            obstacle_direction = self._moving_obstacle_directions[obstacle_idx]
+
+            y_diff = self._config.frequency_ratio * obstacle_direction * 0.1
+            new_y = obstacle_y + y_diff
+            self._moving_obstacles[obstacle_idx, 1] = new_y
+
+            if (new_y > 0.85 and obstacle_direction > 0) or (new_y < 0.15 and obstacle_direction < 0):
+                self._moving_obstacle_directions[obstacle_idx] = -1 * obstacle_direction
 
     def step(self, action):
         # Check if the target needs to be relocated
@@ -256,6 +280,7 @@ class ObstacleAvoid(gym.Env):
         initial_position = self._agent_position.copy()
         # Calculate new position of the agent
         self._move_agent(action)
+        self._move_obstacles()
 
         # Find reward
         reward = self._get_reward(initial_position, self._agent_position, action)
