@@ -6,7 +6,7 @@ from safe_exploration.ddpg.utils import init_fan_in_uniform
 
 
 class Actor(Net):
-    def __init__(self, observation_dim, action_dim, model_file:str=None):
+    def __init__(self, observation_dim, action_dim, action_scale, model_file:str=None):
         config = Config.get().ddpg.actor
 
         super(Actor, self).__init__(observation_dim,
@@ -14,7 +14,8 @@ class Actor(Net):
                                     config.layers,
                                     config.init_bound,
                                     init_fan_in_uniform,
-                                    torch.tanh)
+                                    torch.tanh,
+                                    action_scale)
         
         if model_file is not None:
             state_dict = torch.load(model_file)
