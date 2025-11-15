@@ -1,6 +1,5 @@
 import argparse
 
-from isaacsim import SimulationApp
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(
@@ -25,6 +24,10 @@ from isaaclab.assets.articulation import Articulation, ArticulationCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 
 from isaacsim.sensors.physx import _range_sensor
+
+class ObstacleAvoidIsaacSim:
+
+
 
 TURTLEBOT_CONFIG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(usd_path=f"scripts/tutorials/06_test/turtlebot.usd"),
@@ -64,24 +67,6 @@ def debug_turtlebot(turtlebot: Articulation, depth: np.ndarray):
         print(f"[LiDAR] scan rays={len(depth)} | shape={depth.shape} "
               f"min={float(np.min(depth)):.3f} m | max={float(np.max(depth)):.3f} m")
 
-
-def reset_turtlebot(scene: InteractiveScene, turtlebot: Articulation):
-    # reset the scene entities to their initial positions offset by the environment origins
-    root_turtlebot_state = turtlebot.data.default_root_state.clone()
-    root_turtlebot_state[:, :3] += scene.env_origins
-
-    # copy the default root state to the sim for the turtlebot's orientation and velocity
-    turtlebot.write_root_pose_to_sim(root_turtlebot_state[:, :7])
-    turtlebot.write_root_velocity_to_sim(root_turtlebot_state[:, 7:])
-
-    # copy the default joint states to the sim
-    joint_pos, joint_vel = (
-        turtlebot.data.default_joint_pos.clone(),
-        turtlebot.data.default_joint_vel.clone(),
-    )
-    turtlebot.write_joint_state_to_sim(joint_pos, joint_vel)
-
-
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     sim_dt = sim.get_physics_dt()
     count = 0
@@ -90,7 +75,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
 
     # Play the simulator
     sim.reset()
-    #reset_turtlebot(scene, turtlebot)
     
     lidar_interface = _range_sensor.acquire_lidar_sensor_interface()
 
@@ -105,32 +89,11 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
         if args_cli.debug:
             debug_turtlebot(scene["Turtlebot"], depth)
 
-        # reset
-        if count % 500 == 0:
-            # reset counters
-            count = 0
-            
-            # reset turtlebot
-            #reset_turtlebot(scene, turtlebot)
-            
-            # clear internal buffers
-            #scene.reset()
-            print("[INFO]: Resetting Turtlebot state...")
-
         # NOTE: cameron - ROS2 uses cmd_vel, so there must a conversion from 
         # joint velocity to linear/angular velocity
         # v = w * r,  r = 0.325 radius for the turtlebot
         # [-6.7, 6.7]
         # [6.9, -6.9]
-
-        if count % 200 < 100:
-            #Drive straight by setting equal wheel velocities
-            #action = [[6.0, 6.0]]
-            action = torch.Tensor([[6.0, 6.0]])
-        else:
-            #Drive straight by setting equal wheel velocities
-            #action = [[-6.0, -6.0]]
-            action = torch.Tensor([[-6.0, -6.0]])
 
         turtlebot.set_joint_velocity_target(action)
         scene.write_data_to_sim()
