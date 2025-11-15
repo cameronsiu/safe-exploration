@@ -69,6 +69,25 @@ arguments:
             default: false
           - name: "reward_shaping_slack"
             default: 0.1
+      - name: "obstacleavoidisaacsim"
+        help: "Avoiding obstacles while getting to a goal."
+        properties:
+          - name: "target_margin"
+            default: 0.2
+          - name: "agent_slack"
+            default: 0.05
+          - name: "episode_length"
+            default: 30
+          - name: "frequency_ratio"
+            default: 0.1
+          - name: "respawn_interval"
+            default: 4
+          - name: "target_noise_std"
+            default: 0.05
+          - name: "enable_reward_shaping"
+            default: false
+          - name: "reward_shaping_slack"
+            default: 0.1
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:

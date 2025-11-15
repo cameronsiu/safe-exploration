@@ -9,6 +9,7 @@ from safe_exploration.core.config import Config
 from safe_exploration.env.ballnd import BallND
 from safe_exploration.env.spaceship import Spaceship
 from safe_exploration.env.obstacle_avoid import ObstacleAvoid
+from safe_exploration.env.obstacle_avoid_isaacsim import ObstacleAvoidIsaacSim
 from safe_exploration.ddpg.actor import Actor
 from safe_exploration.ddpg.critic import Critic
 from safe_exploration.ddpg.ddpg import DDPG
@@ -45,6 +46,7 @@ class Trainer:
 
         env = BallND() if self._config.task == "ballnd" else \
             ObstacleAvoid() if self._config.task == "obstacleavoid" else \
+            ObstacleAvoidIsaacSim() if self._config.task == "obstacleavoidisaacsim" else \
             Spaceship()
 
         actor_file = Path(self._config.actor_model_file)
