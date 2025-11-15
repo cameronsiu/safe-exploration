@@ -71,8 +71,8 @@ arguments:
             default: 0.1
           - name: "action_scale"
             default: 0.3
-      - name: "obstacleavoidisaacsim"
-        help: "Avoiding obstacles while getting to a goal."
+      - name: "obstacleavoidisaaclab"
+        help: "Avoiding obstacles while getting to a goal in isaaclab."
         properties:
           - name: "target_margin"
             default: 0.2
@@ -92,6 +92,8 @@ arguments:
             default: 0.1
           - name: "action_scale"
             default: 1.0
+          - name: "num_lidars"
+            default: 36
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -182,7 +184,7 @@ arguments:
           - name: "seed"
             default: 0
           - name: "task"
-            default: "obstacleavoid"
+            default: "obstacleavoidisaaclab"
           - name: "use_safety_layer"
             default: true
           - name: "output_folder"
@@ -198,7 +200,7 @@ arguments:
           - name: "safety_layer_only"
             default: false 
           - name: "train_safety_layer"
-            default: false
+            default: True
           - name: "render_training"
             default: false
           - name: "render_evaluation"

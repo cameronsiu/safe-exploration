@@ -6,10 +6,8 @@ import numpy as np
 import torch
 
 from safe_exploration.core.config import Config
-from safe_exploration.env.ballnd import BallND
-from safe_exploration.env.spaceship import Spaceship
 from safe_exploration.env.obstacle_avoid import ObstacleAvoid
-from safe_exploration.env.obstacle_avoid_isaacsim import ObstacleAvoidIsaacSim
+from safe_exploration.env.obstacle_avoid_isaaclab import ObstacleAvoidIsaacLab
 from safe_exploration.ddpg.actor import Actor
 from safe_exploration.ddpg.critic import Critic
 from safe_exploration.ddpg.ddpg import DDPG
@@ -44,26 +42,15 @@ class Trainer:
         Config.get().pprint()
         print("============================================================")
 
-        env = BallND() if self._config.task == "ballnd" else \
-            ObstacleAvoid() if self._config.task == "obstacleavoid" else \
-            ObstacleAvoidIsaacSim() if self._config.task == "obstacleavoidisaacsim" else \
-            Spaceship()
-        
-        constraint_model_files = glob.glob(self._config.constraint_model_files)
-        print(f"Loading constraint model files: {constraint_model_files}")
+        if self._config.task == "obstacleavoidisaacsim":
+            import isaaclab.sim as sim_utils
 
-        if self._config.use_safety_layer:
-            safety_layer = SafetyLayer(env, constraint_model_files, render=False)
-            
-            if self._config.train_safety_layer:
-                safety_layer.train(self._config.output_folder)
-            if self._config.test:
-                safety_layer.evaluate()
+            sim_cfg = sim_utils.SimulationCfg(device="cpu")
+            sim = sim_utils.SimulationContext(sim_cfg)
+            sim.set_camera_view([3.5, 0.0, 3.2], [0.0, 0.0, 0.5])
+            env = ObstacleAvoidIsaacLab(sim=sim)
         else:
-            safety_layer = None
-
-        if self._config.safety_layer_only:
-            return
+            env = ObstacleAvoid()
 
         actor_file = Path(self._config.actor_model_file)
         critic_file = Path(self._config.critic_model_file)
@@ -82,22 +69,34 @@ class Trainer:
         else:
             print(f"Critic model file does not exist {self._config.critic_model_file}")
 
+        constraint_model_files = glob.glob(self._config.constraint_model_files)
+        print(f"Loading constraint model files: {constraint_model_files}")
+
+        safety_layer = None
+        if self._config.use_safety_layer:
+            safety_layer = SafetyLayer(env, constraint_model_files, render=False)
+            
+            if not self._config.test:
+                safety_layer.train(self._config.output_folder)
+            else:
+                safety_layer.evaluate()
+        else:
+            safety_layer = None
+        
         observation_dim = (seq(env.observation_space.spaces.values())
                             .map(lambda x: x.shape[0])
                             .sum())
-        
-        action_scale = env._action_scale
 
-        actor = Actor(observation_dim, env.action_space.shape[0], action_scale, actor_model_file)
+        actor = Actor(observation_dim, env.action_space.shape[0], actor_model_file)
         critic = Critic(observation_dim, env.action_space.shape[0], critic_model_file)
 
         safe_action_func = safety_layer.get_safe_action if safety_layer else None
-        ddpg = DDPG(env, actor, critic, safe_action_func, render_training=self._config.render_training, render_evaluation=self._config.render_evaluation)
+        ddpg = DDPG(env, actor, critic, safe_action_func, render_training=False, render_evaluation=True)
         
         if not self._config.test:
             ddpg.train(self._config.output_folder)
         else:
-            ddpg.evaluate(self._config.render_evaluation)
+            ddpg.evaluate()
 
 
 if __name__ == '__main__':

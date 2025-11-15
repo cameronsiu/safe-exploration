@@ -25,10 +25,6 @@ from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 
 from isaacsim.sensors.physx import _range_sensor
 
-class ObstacleAvoidIsaacSim:
-
-
-
 TURTLEBOT_CONFIG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(usd_path=f"scripts/tutorials/06_test/turtlebot.usd"),
     actuators={"wheel_acts": ImplicitActuatorCfg(joint_names_expr=[".*"], damping=None, stiffness=None)},

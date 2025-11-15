@@ -80,7 +80,6 @@
     // Python environment path
     // note: the default interpreter is overridden when user selects a workspace interpreter
     //     in the status bar. For example, the virtual environment python interpreter
-    "python.defaultInterpreterPath": "${workspaceFolder}/_isaac_sim/python.sh",
     // ROS distribution
     "ros.distro": "noetic",
     // Language specific settings
