@@ -69,6 +69,8 @@ arguments:
             default: false
           - name: "reward_shaping_slack"
             default: 0.1
+          - name: "action_scale"
+            default: 0.3
       - name: "obstacleavoidisaacsim"
         help: "Avoiding obstacles while getting to a goal."
         properties:
@@ -88,6 +90,8 @@ arguments:
             default: false
           - name: "reward_shaping_slack"
             default: 0.1
+          - name: "action_scale"
+            default: 1.0
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -190,5 +194,13 @@ arguments:
           - name: "constraint_model_files"
             default: "./output/constraint_*.pt"
           - name: "test"
+            default: false
+          - name: "safety_layer_only"
+            default: false 
+          - name: "train_safety_layer"
+            default: false
+          - name: "render_training"
+            default: false
+          - name: "render_evaluation"
             default: false
 

@@ -255,8 +255,13 @@ class DDPG:
         episode_reward = 0
         episode_length = 0
         step_trained_on = 0
+        violations = 0
+        collisions = 0
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
+
+        print(f"Training DDPG for {number_of_steps}")
+        print(f"DDPG Tensorboard folder: {self._writer.logdir}")
 
         time_simulating = 0
         time_training = 0
@@ -273,12 +278,12 @@ class DDPG:
             # Randomly sample episode_ for some initial steps
             action = self._env.action_space.sample() if step < self._config.start_steps \
                      else self._get_action(observation, c)
-            
+
             if step > self._config.start_steps and self._render_training:
                 self._env.render_env()
-            
+
             observation_next, reward, done, _ = self._env.step(action)
-                
+
             episode_reward += reward
             episode_length += 1
 
@@ -291,7 +296,7 @@ class DDPG:
             })
 
             if self._env._did_agent_collide():
-                self._get_action(observation, c)
+                collisions += 1
 
             observation = observation_next
             c = self._env.get_constraint_values()
@@ -299,7 +304,7 @@ class DDPG:
             time_simulating += sim_end - sim_start
 
             if np.any(c > 0):
-                pass
+                violations += 1
 
             # Make all updates at the end of the episode
             if done or (episode_length == self._config.max_episode_length):
@@ -309,21 +314,26 @@ class DDPG:
                     step_trained_on = step
                     update_end = time.time()
                     time_training += update_end - update_start
+
+                # Log metrics
+                self._writer.add_scalar("episode length", episode_length, self._train_global_step)
+                self._writer.add_scalar("episode reward", episode_reward, self._train_global_step)
+                self._writer.add_scalar("constraint violations", violations, self._train_global_step)
+                self._writer.add_scalar("collisions", collisions, self._train_global_step)
+
                 # Reset episode
                 observation = self._env.reset()
                 c = self._env.get_constraint_values()
                 episode_reward = 0
                 episode_length = 0
-                self._writer.add_scalar("episode length", episode_length)
-                self._writer.add_scalar("episode reward", episode_reward)
+                violations = 0
 
             # Check if the epoch is over
             if step != 0 and step % self._config.steps_per_epoch == 0: 
                 eval_start = time.time()
                 epoch_number = int(step / self._config.steps_per_epoch)
                 print(f"Finished epoch {epoch_number}. Running validation ...")
-                should_render = epoch_number % 10 == 0
-                self.evaluate(should_render)
+                self.evaluate(self._render_evaluation)
                 eval_end = time.time()
                 time_eval += eval_end - eval_start
                 print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
@@ -343,6 +353,9 @@ class DDPG:
         print("==========================================================")
         print(f"Finished DDPG training. Time spent: {(time.time() - start_time) // 1} secs")
         print("==========================================================")
+        print(f"Number of collisions : {collisions}")
+
+        self._writer.add_scalar("total_collisions", collisions, 0)
 
         self._actor.save(output_folder)
         self._critic.save(output_folder)

@@ -11,15 +11,13 @@ from safe_exploration.core.config import Config
 class ObstacleAvoid(gym.Env):
     def __init__(self):
         self._config = Config.get().env.obstacleavoid
-        # Set the properties for spaces
-        # cameron: the action space are velocity commands we send to the ball
-        # It is one dimensional
+        self._action_scale = self._config.action_scale
 
         self._num_lidar_buckets = 12
         num_lidars = self._num_lidar_buckets * 4
         self._lidar_directions = self._make_lidar_directions(num_lidars)
 
-        self.action_space = Box(low=-1, high=1, shape=(2,), dtype=np.float32)
+        self.action_space = Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32)
         self.observation_space = Dict({
             'agent_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
             'target_position': Box(low=0, high=1, shape=(2,), dtype=np.float32),
@@ -250,7 +248,7 @@ class ObstacleAvoid(gym.Env):
         # Prepare return payload
         observation = {
             "agent_position": self._agent_position,
-            "target_postion": self._get_noisy_target_position(), # cameron: target position has noise,
+            "target_position": self._get_noisy_target_position(),
             #"nearest_lidar_distance": lidar_readings[nearest_lidar:nearest_lidar+1],
             #"nearest_lidar_direction": self._lidar_directions[nearest_lidar],
             #"lidar_readings_x": scaled_lidar_directions[:, 0],
