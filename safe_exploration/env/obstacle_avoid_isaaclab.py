@@ -1,19 +1,25 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 import gym
 from gym.spaces import Box, Dict
 import numpy as np
 import torch
 
-from isaaclab.sim import SimulationContext
-from isaaclab.scene import InteractiveScene
-from isaaclab.assets.articulation import Articulation
-from isaacsim.sensors.physx import _range_sensor
+if TYPE_CHECKING:
+    from isaacsim.simulation_app import SimulationApp
+    from isaaclab.sim import SimulationContext
+    from isaaclab.scene import InteractiveScene
+    from isaaclab.assets.articulation import Articulation
+
 
 from safe_exploration.core.config import Config
 
-
 class ObstacleAvoidIsaacLab(gym.Env):
-    def __init__(self, sim: SimulationContext):
-        self._config = Config.get().env.obstacleavoidisaacsim
+
+    def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene):
+
+        self._config = Config.get().env.obstacleavoidisaaclab
         self._action_scale = self._config.action_scale
 
         # NOTE: use IsaacSim to change the lidar in simulation and replace parameter in yaml
@@ -21,7 +27,8 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
         # NOTE: turtlebot will apply velocity commands to wheel joints independently
         # TODO: We can change this to be more like ROS2
-        self.action_space = Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32)
+        turtlebot_max_speed = 6
+        self.action_space = Box(low=-turtlebot_max_speed, high=turtlebot_max_speed, shape=(2,), dtype=np.float32)
         
         # NOTE: Not sure to include z value
         self.observation_space = Dict({
@@ -31,8 +38,12 @@ class ObstacleAvoidIsaacLab(gym.Env):
         })
 
         ## Isaac Sim
-        self.sim = sim
-        self.sim_dt = sim.get_physics_dt()
+        self.sim_app = sim_app
+        self.sim_context = sim_context
+        self.sim_dt = self.sim_context.get_physics_dt()
+        self.scene = scene
+
+        from isaacsim.sensors.physx import _range_sensor
 
         self.lidar_interface = _range_sensor.acquire_lidar_sensor_interface()
         # TODO: hardcode for now, not sure how to get prim paths properly here
@@ -49,51 +60,61 @@ class ObstacleAvoidIsaacLab(gym.Env):
             distance_change = sq_final_distance - sq_initial_distance
 
             return distance_change
-        
+
     def _get_lidar_readings(self) -> np.ndarray:
-        depth: np.ndarray = self.lidar_interface.get_linear_depth_data(self.lidar_prim_path)
+        depth: np.ndarray = self.lidar_interface.get_linear_depth_data(self.lidar_prim_path).reshape(-1)
         return depth
-    
+
     def _get_noisy_target_position(self):
         return self._target_position + \
                np.random.normal(0, self._config.target_noise_std, 2)
-    
-    def _reset_target_location(self, scene: InteractiveScene, initial_position: np.ndarray):
-        agent_on_top = initial_position[1] > 5.0
-        target_position = np.random.random(2)
+
+    def _reset_target_location(self, initial_position: np.ndarray):
+        agent_on_top = initial_position[1] > 0.0
+
+        # TODO: Make this better
+        #target_position = np.random.random(2)
 
         if agent_on_top:
-            self._target_position = np.array([1.0, 1.0]) + target_position * np.array([8.0, 2.5])
+            self._target_position = np.array([-8.0, -8.0]) #+ target_position * np.array([8.0, -5.0])
         else:
-            self._target_position = np.array([1.0, 8.0]) + target_position * np.array([8.0, -2.5])
+            self._target_position = np.array([-8.0, 8.0]) #+ target_position * np.array([8.0, -2.5])
 
-        scene.reset()
-        print("[INFO]: Resetting Turtlebot state...")
-    
+        # NOTE: Just resetting the scene not the entire simulation context
+        self.scene.reset()
+
     def _did_agent_collide(self, agent_position: np.ndarray) -> bool:
         # TODO: Check if Isaac Sim collision can return true/false
-        return np.any(agent_position <= -10 | agent_position >= 10)
+        boundary = (agent_position <= -10) | (agent_position >= 10)
+        return np.any(boundary)
     
+    def _is_agent_outside_shaping_boundary(self):
+        return np.any(self._get_lidar_readings() < self._config.reward_shaping_slack)
+
     def _update_time(self):
         # Assume that frequency of motor is 1 (one action per second)
         # NOTE: Not sure if this should be same as self.sim_dt
-        self._current_time += self.sim.get_physics_dt()
+        self._current_time += self.sim_context.get_physics_dt()
+
+    def get_num_constraints(self):
+        return 1
 
     def get_constraint_values(self):
         clipped_readings = np.clip(self._get_lidar_readings(), 0, 0.2)
         return np.array([self._config.agent_slack - np.min(clipped_readings)])
 
-    def reset(self, scene: InteractiveScene):
+    def reset(self):
         """
         Ref: https://isaac-sim.github.io/IsaacLab/main/source/tutorials/01_assets/add_new_robot.html
         """
-        turtlebot: Articulation = scene["Turtlebot"]
+        self.sim_context.reset()
+        turtlebot: Articulation = self.scene["Turtlebot"]
 
-        root_jetbot_state = turtlebot.data.default_root_state.clone()
-        root_jetbot_state[:, :3] += scene.env_origins
+        root_turtlebot_state = turtlebot.data.default_root_state.clone()
+        root_turtlebot_state[:, :3] += self.scene.env_origins
 
-        turtlebot.write_root_pose_to_sim(root_jetbot_state[:, :7])
-        turtlebot.write_root_velocity_to_sim(root_jetbot_state[:, 7:])
+        turtlebot.write_root_pose_to_sim(root_turtlebot_state[:, :7])
+        turtlebot.write_root_velocity_to_sim(root_turtlebot_state[:, 7:])
 
         joint_pos, joint_vel = (
             turtlebot.data.default_joint_pos.clone(),
@@ -103,37 +124,41 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
         self._current_time = 0.
 
-    def step(self, scene: InteractiveScene, action: torch.Tensor):
-        turtlebot: Articulation = scene["Turtlebot"]
-        initial_position = turtlebot.data.root_pos_w[:, [0, 1]].cpu().numpy()
+        return self.step(np.zeros(2))[0]
 
-        if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
-            self._reset_target_location(scene, initial_position)
+    def step(self, action: np.ndarray):
+        if self.sim_app.is_running():
 
-        self._update_time()
+            turtlebot: Articulation = self.scene["Turtlebot"]
+            initial_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
 
-        turtlebot.set_joint_velocity_target(action)
-        scene.write_data_to_sim()
-        self.sim.step()
-        
-        agent_position = turtlebot.data.root_pos_w[:, [0, 1]].cpu().numpy()
+            if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
+                self._reset_target_location(initial_position)
 
-        reward = self._get_reward(initial_position, agent_position)
+            self._update_time()
 
-        lidar_readings: np.ndarray = self._get_lidar_readings()
+            turtlebot.set_joint_velocity_target(torch.tensor(action))
+            self.scene.write_data_to_sim()
+            self.sim_context.step()
 
-        observation = {
-            "agent_position": agent_position,
-            "target_position": self._get_noisy_target_position(),
-            "lidar_readings": lidar_readings
-        }
+            agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
 
-        # TODO: Check if IsaacLab collider returns true/false
-        done = self._did_agent_collide(agent_position) \
-               or int(self._current_time // 1) > self._config.episode_length
+            reward = self._get_reward(initial_position, agent_position)
 
-        # TODO: Not sure if this should be here
-        scene.update(self.sim_dt)
+            lidar_readings: np.ndarray = self._get_lidar_readings()
 
-        return observation, reward, done, {}
+            observation = {
+                "agent_position": agent_position,
+                "target_position": self._get_noisy_target_position(),
+                "lidar_readings": lidar_readings
+            }
+
+            # TODO: Check if IsaacLab collider returns true/false
+            done = self._did_agent_collide(agent_position) \
+                or int(self._current_time // 1) > self._config.episode_length
+
+            # TODO: Not sure if this should be here
+            self.scene.update(self.sim_dt)
+
+            return observation, reward, done, {}
 

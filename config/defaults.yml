@@ -205,4 +205,8 @@ arguments:
             default: false
           - name: "render_evaluation"
             default: false
+          - name: "device"
+            default: "cpu"
+          - name: "num_envs"
+            default: 1
 

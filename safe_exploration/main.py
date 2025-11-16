@@ -42,13 +42,8 @@ class Trainer:
         Config.get().pprint()
         print("============================================================")
 
-        if self._config.task == "obstacleavoidisaacsim":
-            import isaaclab.sim as sim_utils
-
-            sim_cfg = sim_utils.SimulationCfg(device="cpu")
-            sim = sim_utils.SimulationContext(sim_cfg)
-            sim.set_camera_view([3.5, 0.0, 3.2], [0.0, 0.0, 0.5])
-            env = ObstacleAvoidIsaacLab(sim=sim)
+        if self._config.task == "obstacleavoidisaaclab":
+            env = self.isaaclab_env()
         else:
             env = ObstacleAvoid()
 
@@ -82,7 +77,7 @@ class Trainer:
                 safety_layer.evaluate()
         else:
             safety_layer = None
-        
+
         observation_dim = (seq(env.observation_space.spaces.values())
                             .map(lambda x: x.shape[0])
                             .sum())
@@ -97,6 +92,59 @@ class Trainer:
             ddpg.train(self._config.output_folder)
         else:
             ddpg.evaluate()
+
+    def isaaclab_env(self):
+        import argparse
+        from isaaclab.app import AppLauncher
+        from isaacsim.simulation_app import SimulationApp
+
+        args = argparse.Namespace(
+            num_envs=self._config.num_envs,
+            device=self._config.device,
+            headless=not self._config.render_training,
+        )
+
+        app_launcher = AppLauncher(args)
+        sim_app: SimulationApp = app_launcher.app
+
+        import isaaclab.sim as sim_utils
+        from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
+        from isaaclab.actuators import ImplicitActuatorCfg
+        from isaaclab.assets import AssetBaseCfg
+        from isaaclab.assets.articulation import ArticulationCfg
+
+
+        # HACK https://github.com/isaac-sim/IsaacLab/discussions/2256
+        # Setting enable_scene_query_support to true because lidar values were not being updated
+        # Also, add  "isaacsim.sensors.physx" = {}  inside of dependencies isaaclab.python.headless.kit 
+        sim_cfg = sim_utils.SimulationCfg(device=self._config.device, enable_scene_query_support=True)
+        sim_context = sim_utils.SimulationContext(sim_cfg)
+        sim_context.set_camera_view([3.5, 0.0, 3.2], [0.0, 0.0, 0.5])
+
+        TURTLEBOT_CONFIG = ArticulationCfg(
+            spawn=sim_utils.UsdFileCfg(usd_path=f"safe_exploration/env/turtlebot.usd"),
+            actuators={"wheel_acts": ImplicitActuatorCfg(joint_names_expr=[".*"], damping=None, stiffness=None)},
+        )
+
+        class ObstacleAvoidCfg(InteractiveSceneCfg):
+            """Obstacle Avoid Scene."""
+
+            scene: AssetBaseCfg = AssetBaseCfg(
+                prim_path="{ENV_REGEX_NS}/Environment",
+                init_state=AssetBaseCfg.InitialStateCfg(
+                    pos=(0.0, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0)
+                ),
+                spawn=sim_utils.UsdFileCfg(usd_path="safe_exploration/env/obstacle_avoid.usd"),
+                debug_vis=True,
+            )
+
+            Turtlebot: ArticulationCfg = TURTLEBOT_CONFIG.replace(prim_path="{ENV_REGEX_NS}/Turtlebot")
+
+        scene_cfg = ObstacleAvoidCfg(self._config.num_envs, env_spacing=2.0)
+        scene = InteractiveScene(scene_cfg)
+
+        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene)
+        return env
 
 
 if __name__ == '__main__':
