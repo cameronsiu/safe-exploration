@@ -69,10 +69,10 @@ class ObstacleAvoidIsaacLab(gym.Env):
         return self._target_position + \
                np.random.normal(0, self._config.target_noise_std, 2)
 
-    def _reset_target_location(self, initial_position: np.ndarray):
-        agent_on_top = initial_position[1] > 0.0
+    def _reset_target_location(self):
+        agent_on_top = self._agent_position[1] > 0.0
 
-        # TODO: Make this better
+        # TODO: Fix this
         #target_position = np.random.random(2)
 
         if agent_on_top:
@@ -83,9 +83,9 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # NOTE: Just resetting the scene not the entire simulation context
         self.scene.reset()
 
-    def _did_agent_collide(self, agent_position: np.ndarray) -> bool:
+    def _did_agent_collide(self) -> bool:
         # TODO: Check if Isaac Sim collision can return true/false
-        boundary = (agent_position <= -10) | (agent_position >= 10)
+        boundary = (self._agent_position <= -10) | (self._agent_position >= 10)
         return np.any(boundary)
     
     def _is_agent_outside_shaping_boundary(self):
@@ -110,8 +110,20 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self.sim_context.reset()
         turtlebot: Articulation = self.scene["Turtlebot"]
 
+        agent_position = np.random.random(2)
+        target_position = np.random.random(2)
+        agent_on_top = np.random.random(1)[0] > 0
+
+        if agent_on_top:
+            self._agent_position = np.array([-8.0, 8.0]) #+ agent_position * np.array([0.8, -0.25])
+            self._target_position = np.array([-0.8, -0.8]) #+ target_position * np.array([0.8, 0.25])
+        else:
+            self._agent_position = np.array([-8.0, -8.0]) #+ agent_position * np.array([0.8, 0.25])
+            self._target_position = np.array([-8.0, 8.0]) #+ target_position * np.array([0.8, -0.25])
+
         root_turtlebot_state = turtlebot.data.default_root_state.clone()
         root_turtlebot_state[:, :3] += self.scene.env_origins
+        root_turtlebot_state[:, :2] += self._agent_position
 
         turtlebot.write_root_pose_to_sim(root_turtlebot_state[:, :7])
         turtlebot.write_root_velocity_to_sim(root_turtlebot_state[:, 7:])
@@ -133,7 +145,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             initial_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
 
             if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
-                self._reset_target_location(initial_position)
+                self._reset_target_location()
 
             self._update_time()
 
@@ -141,20 +153,20 @@ class ObstacleAvoidIsaacLab(gym.Env):
             self.scene.write_data_to_sim()
             self.sim_context.step()
 
-            agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
+            self._agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
 
-            reward = self._get_reward(initial_position, agent_position)
+            reward = self._get_reward(initial_position, self._agent_position)
 
             lidar_readings: np.ndarray = self._get_lidar_readings()
 
             observation = {
-                "agent_position": agent_position,
+                "agent_position": self._agent_position,
                 "target_position": self._get_noisy_target_position(),
                 "lidar_readings": lidar_readings
             }
 
             # TODO: Check if IsaacLab collider returns true/false
-            done = self._did_agent_collide(agent_position) \
+            done = self._did_agent_collide() \
                 or int(self._current_time // 1) > self._config.episode_length
 
             # TODO: Not sure if this should be here
