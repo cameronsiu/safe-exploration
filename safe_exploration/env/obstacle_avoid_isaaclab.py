@@ -11,19 +11,18 @@ if TYPE_CHECKING:
     from isaaclab.sim import SimulationContext
     from isaaclab.scene import InteractiveScene
     from isaaclab.assets.articulation import Articulation
-
+    from isaaclab.sensors import ContactSensor
 
 from safe_exploration.core.config import Config
 
 class ObstacleAvoidIsaacLab(gym.Env):
 
     def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene):
-
         self._config = Config.get().env.obstacleavoidisaaclab
         self._action_scale = self._config.action_scale
 
         # NOTE: use IsaacSim to change the lidar in simulation and replace parameter in yaml
-        self.num_lidars = self._config.num_lidars
+        self._num_lidar_buckets = self._config.num_lidars
 
         # NOTE: turtlebot will apply velocity commands to wheel joints independently
         # TODO: We can change this to be more like ROS2
@@ -31,10 +30,11 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self.action_space = Box(low=-turtlebot_max_speed, high=turtlebot_max_speed, shape=(2,), dtype=np.float32)
         
         # NOTE: Not sure to include z value
+        # TODO: Use parameters for boundaries
         self.observation_space = Dict({
             'agent_position': Box(low=-10, high=10, shape=(2,), dtype=np.float32),
             'target_position': Box(low=-8, high=8, shape=(2,), dtype=np.float32),
-            'lidar_readings': Box(low=0.2, high=15, shape=(self.num_lidars,), dtype=np.float32)
+            'lidar_readings': Box(low=0.2, high=15, shape=(self._num_lidar_buckets,), dtype=np.float32)
         })
 
         ## Isaac Sim
@@ -49,6 +49,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # TODO: hardcode for now, not sure how to get prim paths properly here
         self.lidar_prim_path = "/World/envs/env_0/Turtlebot/turtlebot3_burger/base_footprint/base_link/base_scan/Lidar"
 
+        self.reset()
 
     def _get_reward(self, initial_position: np.ndarray, final_position: np.ndarray):
         if self._config.enable_reward_shaping and self._is_agent_outside_shaping_boundary():
@@ -62,39 +63,57 @@ class ObstacleAvoidIsaacLab(gym.Env):
             return distance_change
 
     def _get_lidar_readings(self) -> np.ndarray:
-        depth: np.ndarray = self.lidar_interface.get_linear_depth_data(self.lidar_prim_path).reshape(-1)
-        return depth
+        if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
+            return self._lidar_readings
+        elif self._did_agent_collide():
+            self._lidar_readings = np.zeros((self._num_lidar_buckets,))
+            self._lidar_measure_time = self._current_time
+            return self._lidar_readings
+        else:
+            self._lidar_readings: np.ndarray = self.lidar_interface.get_linear_depth_data(self.lidar_prim_path).reshape(-1)
+            self._lidar_measure_time = self._current_time
+            return self._lidar_readings
 
     def _get_noisy_target_position(self):
         return self._target_position + \
                np.random.normal(0, self._config.target_noise_std, 2)
 
     def _reset_target_location(self):
-        agent_on_top = self._agent_position[1] > 0.0
+        agent_y = self._agent_position[1]
 
-        # TODO: Fix this
-        #target_position = np.random.random(2)
-
-        if agent_on_top:
-            self._target_position = np.array([-8.0, -8.0]) #+ target_position * np.array([8.0, -5.0])
+        # If agent is in top half, target goes bottom
+        if agent_y > 0:
+            self._target_position = self._sample_position(-10, -2)
         else:
-            self._target_position = np.array([-8.0, 8.0]) #+ target_position * np.array([8.0, -2.5])
-
-        # NOTE: Just resetting the scene not the entire simulation context
-        self.scene.reset()
+            self._target_position = self._sample_position(2, 10)
 
     def _did_agent_collide(self) -> bool:
-        # TODO: Check if Isaac Sim collision can return true/false
-        boundary = (self._agent_position <= -10) | (self._agent_position >= 10)
-        return np.any(boundary)
+        contact_forces_base: ContactSensor = self.scene["contact_forces_B"]
+        contact_forces_left_wheel: ContactSensor = self.scene["contact_forces_LW"]
+        contact_forces_right_wheel: ContactSensor = self.scene["contact_forces_RW"]
+
+        collide_with_obstacle = (contact_forces_base.data.force_matrix_w != 0.0) | \
+                                (contact_forces_left_wheel.data.force_matrix_w != 0.0) | \
+                                (contact_forces_right_wheel.data.force_matrix_w != 0.0)
+
+        return torch.any(collide_with_obstacle)
     
     def _is_agent_outside_shaping_boundary(self):
         return np.any(self._get_lidar_readings() < self._config.reward_shaping_slack)
 
     def _update_time(self):
         # Assume that frequency of motor is 1 (one action per second)
-        # NOTE: Not sure if this should be same as self.sim_dt
+        # TODO: Not sure if this is correct
         self._current_time += self.sim_context.get_physics_dt()
+
+    def _sample_position(self, y_min: float, y_max: float, margin:float=1.0):
+        """
+        Sample a (x,y) in [-10,10] x [-10,10] but restricted to a y-band.
+        margin avoids spawning at walls.
+        """
+        x = np.random.uniform(-10 + margin, 10 - margin)
+        y = np.random.uniform(y_min + margin, y_max - margin)
+        return np.array([x, y], dtype=np.float32)
 
     def get_num_constraints(self):
         return 1
@@ -105,37 +124,48 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
     def reset(self):
         """
-        Ref: https://isaac-sim.github.io/IsaacLab/main/source/tutorials/01_assets/add_new_robot.html
-        """
-        self.sim_context.reset()
+        Resets the agent in either the top or bottom half of the map,
+        and places the target in the opposite half.
+        Coordinate system:
+            x ∈ [-10,10]
+            y ∈ [-10,10]   (origin at center)
+        """        
         turtlebot: Articulation = self.scene["Turtlebot"]
 
-        agent_position = np.random.random(2)
-        target_position = np.random.random(2)
-        agent_on_top = np.random.random(1)[0] > 0
+        # Randomly decide agent region (top or bottom)
+        agent_on_top = np.random.rand() > 0.5
 
         if agent_on_top:
-            self._agent_position = np.array([-8.0, 8.0]) #+ agent_position * np.array([0.8, -0.25])
-            self._target_position = np.array([-0.8, -0.8]) #+ target_position * np.array([0.8, 0.25])
+            self._agent_position = self._sample_position(2, 10)
+            self._target_position = self._sample_position(-10, -2)
         else:
-            self._agent_position = np.array([-8.0, -8.0]) #+ agent_position * np.array([0.8, 0.25])
-            self._target_position = np.array([-8.0, 8.0]) #+ target_position * np.array([0.8, -0.25])
+            self._agent_position = self._sample_position(-10, -2)
+            self._target_position = self._sample_position(2, 10)
 
-        root_turtlebot_state = turtlebot.data.default_root_state.clone()
-        root_turtlebot_state[:, :3] += self.scene.env_origins
-        root_turtlebot_state[:, :2] += self._agent_position
+        # Write the agent pose into IsaacSim
+        root_state = turtlebot.data.default_root_state.clone()
+        root_state[:, :3] += self.scene.env_origins
+        agent_position = torch.tensor(self._agent_position)
+        root_state[:, 0] = agent_position[0]
+        root_state[:, 1] = agent_position[1]
 
-        turtlebot.write_root_pose_to_sim(root_turtlebot_state[:, :7])
-        turtlebot.write_root_velocity_to_sim(root_turtlebot_state[:, 7:])
+        turtlebot.write_root_pose_to_sim(root_state[:, :7])
+        turtlebot.write_root_velocity_to_sim(root_state[:, 7:])
 
-        joint_pos, joint_vel = (
-            turtlebot.data.default_joint_pos.clone(),
-            turtlebot.data.default_joint_vel.clone(),
-        )
+        # Reset joints
+        joint_pos = turtlebot.data.default_joint_pos.clone()
+        joint_vel = turtlebot.data.default_joint_vel.clone()
         turtlebot.write_joint_state_to_sim(joint_pos, joint_vel)
 
-        self._current_time = 0.
+        # Reset timers
+        self._current_time = 0.0
+        self._lidar_readings = None
+        self._lidar_measure_time = -1.0
 
+        # Reset only environment physics (not entire sim)
+        self.scene.reset()
+
+        # Return initial observation
         return self.step(np.zeros(2))[0]
 
     def step(self, action: np.ndarray):
@@ -173,4 +203,8 @@ class ObstacleAvoidIsaacLab(gym.Env):
             self.scene.update(self.sim_dt)
 
             return observation, reward, done, {}
+        
+    def render_env(self):
+        """Isaac Sim is already rendered"""
+        pass
 

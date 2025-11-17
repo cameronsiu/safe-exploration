@@ -91,7 +91,7 @@ arguments:
           - name: "reward_shaping_slack"
             default: 0.1
           - name: "action_scale"
-            default: 1.0
+            default: 6.0
           - name: "num_lidars"
             default: 36
   - name: "ddpg"

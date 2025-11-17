@@ -116,7 +116,7 @@ class Trainer:
         from isaaclab.actuators import ImplicitActuatorCfg
         from isaaclab.assets import AssetBaseCfg
         from isaaclab.assets.articulation import ArticulationCfg
-
+        from isaaclab.sensors import ContactSensorCfg
 
         # HACK https://github.com/isaac-sim/IsaacLab/discussions/2256
         # Setting enable_scene_query_support to true because lidar values were not being updated
@@ -126,7 +126,7 @@ class Trainer:
         sim_context.set_camera_view([3.5, 0.0, 3.2], [0.0, 0.0, 0.5])
 
         TURTLEBOT_CONFIG = ArticulationCfg(
-            spawn=sim_utils.UsdFileCfg(usd_path=f"safe_exploration/env/turtlebot.usd"),
+            spawn=sim_utils.UsdFileCfg(usd_path=f"safe_exploration/env/turtlebot.usd", activate_contact_sensors=True),
             actuators={"wheel_acts": ImplicitActuatorCfg(joint_names_expr=[".*"], damping=None, stiffness=None)},
         )
 
@@ -139,13 +139,35 @@ class Trainer:
                     pos=(0.0, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0)
                 ),
                 spawn=sim_utils.UsdFileCfg(usd_path="safe_exploration/env/obstacle_avoid.usd"),
-                debug_vis=True,
             )
 
             Turtlebot: ArticulationCfg = TURTLEBOT_CONFIG.replace(prim_path="{ENV_REGEX_NS}/Turtlebot")
 
+            contact_forces_RW = ContactSensorCfg(
+                prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/wheel_right_link",
+                update_period=0.0,
+                history_length=6,
+                filter_prim_paths_expr=["{ENV_REGEX_NS}/Environment/Walls"],
+            )
+
+            contact_forces_LW = ContactSensorCfg(
+                prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/wheel_left_link",
+                update_period=0.0,
+                history_length=6,
+                filter_prim_paths_expr=["{ENV_REGEX_NS}/Environment/Walls"],
+            )
+
+            contact_forces_B = ContactSensorCfg(
+                prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/base_footprint",
+                update_period=0.0,
+                history_length=6,
+                filter_prim_paths_expr=["{ENV_REGEX_NS}/Environment/Walls"],
+            )
+
         scene_cfg = ObstacleAvoidCfg(self._config.num_envs, env_spacing=2.0)
         scene = InteractiveScene(scene_cfg)
+
+        sim_context.reset()
 
         env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene)
         return env
