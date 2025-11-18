@@ -4,52 +4,6 @@ arguments:
   - name: "env"
     help: "Configuration related to simulation environments."
     properties:
-      - name: "spaceship"
-        help: "Spaceship environment configuration."
-        properties:
-          - name: "length"
-            default: 2.5
-          - name: "margin"
-            default: 0.2
-          - name: "agent_slack"
-            default: 0.05
-          - name: "frequency_ratio"
-            default: 0.1
-          - name: "target_noise_std"
-            default: 0.05
-          - name: "target_radius"
-            default: 0.05
-          - name: "corridor_episode_length"
-            default: 15
-          - name: "arena_episode_length"
-            default: 45
-          - name: "enable_reward_shaping"
-            default: false
-          - name: "is_arena"
-            default: true
-          - name: "reward_shaping_slack"
-            default: 0.1
-      - name: "ballnd"
-        help: "Ball-ND environment configuration."
-        properties:
-          - name: "n"
-            default: 2
-          - name: "target_margin"
-            default: 0.2
-          - name: "agent_slack"
-            default: 0.05
-          - name: "episode_length"
-            default: 30
-          - name: "frequency_ratio"
-            default: 0.1
-          - name: "respawn_interval"
-            default: 4
-          - name: "target_noise_std"
-            default: 0.05
-          - name: "enable_reward_shaping"
-            default: false
-          - name: "reward_shaping_slack"
-            default: 0.1
       - name: "obstacleavoid"
         help: "Avoiding obstacles while getting to a goal."
         properties:
@@ -94,6 +48,8 @@ arguments:
             default: 6.0
           - name: "num_lidars"
             default: 36
+          - name: "sim_dt"
+            default: 0.1
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:

@@ -39,7 +39,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         ## Isaac Sim
         self.sim_app = sim_app
         self.sim_context = sim_context
-        self.sim_dt = self.sim_context.get_physics_dt()
+        self.sim_dt = self._config.sim_dt
         self.scene = scene
 
         from isaacsim.sensors.physx import _range_sensor

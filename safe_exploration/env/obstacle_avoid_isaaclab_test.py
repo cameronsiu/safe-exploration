@@ -118,9 +118,16 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     lidar_prim_path = "/World/envs/env_0/Turtlebot/turtlebot3_burger/Lidar"
     NUM_LIDARS = 300 // 10 # 10 is the amount we skip
 
+    count = 0
+
     while simulation_app.is_running():
         if args_cli.debug:
             debug_turtlebot(turtlebot)
+
+        if count == 0:
+            action = torch.Tensor([[6.0, 6.0]])
+            turtlebot.set_joint_velocity_target(action)
+            scene.write_data_to_sim()
 
         # reset
         # if count % 500 == 0:
@@ -151,36 +158,33 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
         depth: np.ndarray = lidar_interface.get_linear_depth_data(lidar_prim_path)
         depth = depth.reshape(-1)[::NUM_LIDARS]
 
-        #turtlebot.set_joint_velocity_target(action)
-        #scene.write_data_to_sim()
+        # contact_forces_base: ContactSensor = scene["contact_forces_B"]
+        # contact_forces_left_wheel: ContactSensor = scene["contact_forces_LW"]
+        # contact_forces_right_wheel: ContactSensor = scene["contact_forces_RW"]
 
-        contact_forces_base: ContactSensor = scene["contact_forces_B"]
-        contact_forces_left_wheel: ContactSensor = scene["contact_forces_LW"]
-        contact_forces_right_wheel: ContactSensor = scene["contact_forces_RW"]
+        # collide_with_obstacle = (contact_forces_base.data.force_matrix_w.abs() > 1e-4) | \
+        #                         (contact_forces_left_wheel.data.force_matrix_w.abs() > 1e-4) | \
+        #                         (contact_forces_right_wheel.data.force_matrix_w.abs() > 1e-4)
 
-        collide_with_obstacle = (contact_forces_base.data.force_matrix_w.abs() > 1e-4) | \
-                                (contact_forces_left_wheel.data.force_matrix_w.abs() > 1e-4) | \
-                                (contact_forces_right_wheel.data.force_matrix_w.abs() > 1e-4)
-
-        if torch.any(collide_with_obstacle):
-            # print information from the sensors
-            print("-------------------------------")
-            print(scene["contact_forces_RW"])
-            print("Received force matrix of: ", scene["contact_forces_RW"].data.force_matrix_w)
-            print("Received contact force of: ", scene["contact_forces_RW"].data.net_forces_w)
-            print("-------------------------------")
-            print(scene["contact_forces_LW"])
-            print("Received force matrix of: ", scene["contact_forces_LW"].data.force_matrix_w)
-            print("Received contact force of: ", scene["contact_forces_LW"].data.net_forces_w)
-            print("-------------------------------")
-            print(scene["contact_forces_B"])
-            print("Received force matrix of: ", scene["contact_forces_B"].data.force_matrix_w)
-            print("Received contact force of: ", scene["contact_forces_B"].data.net_forces_w)
+        # if torch.any(collide_with_obstacle):
+        #     # print information from the sensors
+        #     print("-------------------------------")
+        #     print(scene["contact_forces_RW"])
+        #     print("Received force matrix of: ", scene["contact_forces_RW"].data.force_matrix_w)
+        #     print("Received contact force of: ", scene["contact_forces_RW"].data.net_forces_w)
+        #     print("-------------------------------")
+        #     print(scene["contact_forces_LW"])
+        #     print("Received force matrix of: ", scene["contact_forces_LW"].data.force_matrix_w)
+        #     print("Received contact force of: ", scene["contact_forces_LW"].data.net_forces_w)
+        #     print("-------------------------------")
+        #     print(scene["contact_forces_B"])
+        #     print("Received force matrix of: ", scene["contact_forces_B"].data.force_matrix_w)
+        #     print("Received contact force of: ", scene["contact_forces_B"].data.net_forces_w)
             
-            print(collide_with_obstacle)
-            # print(contact_forces_base.data.net_forces_w)
-            # print(contact_forces_left_wheel.data.net_forces_w)
-            # print(contact_forces_right_wheel.data.net_forces_w)
+        #     print(collide_with_obstacle)
+        #     # print(contact_forces_base.data.net_forces_w)
+        #     # print(contact_forces_left_wheel.data.net_forces_w)
+        #     # print(contact_forces_right_wheel.data.net_forces_w)
 
 
         sim.step()
