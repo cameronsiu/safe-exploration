@@ -26,8 +26,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
         # NOTE: turtlebot will apply velocity commands to wheel joints independently
         # TODO: We can change this to be more like ROS2
-        turtlebot_max_speed = 6
-        self.action_space = Box(low=-turtlebot_max_speed, high=turtlebot_max_speed, shape=(2,), dtype=np.float32)
+        self.action_space = Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32)
         
         # NOTE: Not sure to include z value
         # TODO: Use parameters for boundaries
@@ -129,7 +128,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         Coordinate system:
             x ∈ [-10,10]
             y ∈ [-10,10]   (origin at center)
-        """        
+        """
         turtlebot: Articulation = self.scene["Turtlebot"]
 
         # Randomly decide agent region (top or bottom)

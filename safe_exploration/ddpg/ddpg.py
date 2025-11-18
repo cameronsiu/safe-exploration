@@ -338,7 +338,7 @@ class DDPG:
                 time_eval += eval_end - eval_start
                 print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
 
-                print(f"batsh sample: {self._batch_sample_time * 1000:.2}")
+                print(f"batch sample: {self._batch_sample_time * 1000:.2}")
                 print(f"tensor convert: {self._tensor_convert_time * 1000:.2}")
                 print(f"actor update: {self._actor_update_time * 1000:.2}")
                 print(f"critic update: {self._critic_update_time * 1000:.2}")

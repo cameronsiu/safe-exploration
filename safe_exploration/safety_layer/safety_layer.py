@@ -182,11 +182,7 @@ class SafetyLayer:
 
         action_new = action - correction
 
-        action_clipped = np.clip(action_new, -1, 1)
-
-        agent_position = observation["agent_position"]
-        if agent_position[0] < 0.1 or agent_position[1] > 0.9:
-            pass
+        action_clipped = np.clip(action_new, -self._env._action_scale, self._env._action_scale)
 
         return action_clipped
 

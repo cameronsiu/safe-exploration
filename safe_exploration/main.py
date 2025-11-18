@@ -83,7 +83,7 @@ class Trainer:
         observation_dim = (seq(env.observation_space.spaces.values())
                             .map(lambda x: x.shape[0])
                             .sum())
-        
+
         action_scale = env._action_scale
 
         actor = Actor(observation_dim, env.action_space.shape[0], action_scale, actor_model_file)
@@ -91,11 +91,14 @@ class Trainer:
 
         safe_action_func = safety_layer.get_safe_action if safety_layer else None
         ddpg = DDPG(env, actor, critic, safe_action_func, render_training=self._config.render_training, render_evaluation=self._config.render_evaluation)
-        
+
         if not self._config.test:
             ddpg.train(self._config.output_folder)
         else:
             ddpg.evaluate(self._config.render_evaluation)
+
+        if self._config.task == "obstacleavoidisaaclab":
+            env.sim_app.close()
 
     def isaaclab_env(self):
         import argparse
