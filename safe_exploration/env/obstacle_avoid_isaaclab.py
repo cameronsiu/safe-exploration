@@ -17,7 +17,7 @@ from safe_exploration.core.config import Config
 
 class ObstacleAvoidIsaacLab(gym.Env):
 
-    def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene):
+    def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene, render_step: bool):
         self._config = Config.get().env.obstacleavoidisaaclab
         self._action_scale = self._config.action_scale
 
@@ -41,6 +41,9 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self.sim_context = sim_context
         self.sim_dt = self._config.sim_dt
         self.scene = scene
+
+        # Render Sim steps
+        self.render_step = render_step
 
         from isaacsim.sensors.physx import _range_sensor
 
@@ -103,7 +106,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
     def _update_time(self):
         # Assume that frequency of motor is 1 (one action per second)
         # TODO: Not sure if this is correct
-        self._current_time += self.sim_context.get_physics_dt()
+        self._current_time += self._config.sim_dt
 
     def _sample_position(self, y_min: float, y_max: float, margin:float=1.0):
         """
@@ -180,7 +183,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
             turtlebot.set_joint_velocity_target(torch.tensor(action))
             self.scene.write_data_to_sim()
-            self.sim_context.step()
+            self.sim_context.step(self.render_step)
 
             self._agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
 

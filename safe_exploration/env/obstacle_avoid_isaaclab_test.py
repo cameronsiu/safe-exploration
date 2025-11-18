@@ -35,7 +35,7 @@ from isaaclab.sensors import ContactSensorCfg, ContactSensor
 from isaacsim.sensors.physx import _range_sensor
 
 TURTLEBOT_CONFIG = ArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(usd_path=f"scripts/tutorials/06_test/turtlebot.usd", activate_contact_sensors=True),
+    spawn=sim_utils.UsdFileCfg(usd_path=f"safe_exploration/env/turtlebot.usd", activate_contact_sensors=True),
     actuators={"wheel_acts": ImplicitActuatorCfg(joint_names_expr=[".*"], damping=None, stiffness=None)},
 )
 
@@ -47,7 +47,7 @@ class ObstacleAvoidCfg(InteractiveSceneCfg):
         init_state=AssetBaseCfg.InitialStateCfg(
             pos=(0.0, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0)
         ),
-        spawn=sim_utils.UsdFileCfg(usd_path="scripts/tutorials/06_test/obstacle_avoid.usd"),
+        spawn=sim_utils.UsdFileCfg(usd_path="safe_exploration/env/obstacle_avoid.usd"),
     )
 
     Turtlebot: ArticulationCfg = TURTLEBOT_CONFIG.replace(prim_path="{ENV_REGEX_NS}/Turtlebot")
@@ -115,20 +115,24 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     lidar_interface = _range_sensor.acquire_lidar_sensor_interface()
 
     # TODO: hardcode for now, not sure how to get prim paths properly here
-    lidar_prim_path = "/World/envs/env_0/Turtlebot/turtlebot3_burger/Lidar"
-    NUM_LIDARS = 300 // 10 # 10 is the amount we skip
+    lidar_prim_path = "/World/envs/env_0/Turtlebot/turtlebot3_burger/base_footprint/base_link/base_scan/Lidar"
 
     count = 0
 
+    action = torch.Tensor([[6.0, 6.0]])
+    turtlebot.set_joint_velocity_target(action)
+    scene.write_data_to_sim()
+
     while simulation_app.is_running():
-        if args_cli.debug:
-            debug_turtlebot(turtlebot)
+        #if args_cli.debug:
+        debug_turtlebot(turtlebot)
 
-        if count == 0:
-            action = torch.Tensor([[6.0, 6.0]])
-            turtlebot.set_joint_velocity_target(action)
-            scene.write_data_to_sim()
-
+        if count % 50 == 0:
+            # TODO: See how step works?
+            #scene.write_data_to_sim()
+            count = 0
+            scene.update(0.00001)
+        
         # reset
         # if count % 500 == 0:
         #     # reset counters
@@ -156,7 +160,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
 
         # NOTE: depth data from IsaacSim is a numpy array
         depth: np.ndarray = lidar_interface.get_linear_depth_data(lidar_prim_path)
-        depth = depth.reshape(-1)[::NUM_LIDARS]
 
         # contact_forces_base: ContactSensor = scene["contact_forces_B"]
         # contact_forces_left_wheel: ContactSensor = scene["contact_forces_LW"]
@@ -186,10 +189,9 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
         #     # print(contact_forces_left_wheel.data.net_forces_w)
         #     # print(contact_forces_right_wheel.data.net_forces_w)
 
-
         sim.step()
         count += 1
-        scene.update(sim_dt)
+        # scene.update(0.00001)
 
 
 def main():
