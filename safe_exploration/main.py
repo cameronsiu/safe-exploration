@@ -6,9 +6,8 @@ import numpy as np
 import torch
 
 from safe_exploration.core.config import Config
-from safe_exploration.env.ballnd import BallND
-from safe_exploration.env.spaceship import Spaceship
 from safe_exploration.env.obstacle_avoid import ObstacleAvoid
+from safe_exploration.env.obstacle_avoid_isaaclab import ObstacleAvoidIsaacLab
 from safe_exploration.ddpg.actor import Actor
 from safe_exploration.ddpg.critic import Critic
 from safe_exploration.ddpg.ddpg import DDPG
@@ -43,10 +42,11 @@ class Trainer:
         Config.get().pprint()
         print("============================================================")
 
-        env = BallND() if self._config.task == "ballnd" else \
-            ObstacleAvoid() if self._config.task == "obstacleavoid" else \
-            Spaceship()
-        
+        if self._config.task == "obstacleavoidisaaclab":
+            env = self.isaaclab_env()
+        else:
+            env = ObstacleAvoid()
+
         constraint_model_files = glob.glob(self._config.constraint_model_files)
         print(f"Loading constraint model files: {constraint_model_files}")
 
@@ -83,7 +83,7 @@ class Trainer:
         observation_dim = (seq(env.observation_space.spaces.values())
                             .map(lambda x: x.shape[0])
                             .sum())
-        
+
         action_scale = env._action_scale
 
         actor = Actor(observation_dim, env.action_space.shape[0], action_scale, actor_model_file)
@@ -91,11 +91,89 @@ class Trainer:
 
         safe_action_func = safety_layer.get_safe_action if safety_layer else None
         ddpg = DDPG(env, actor, critic, safe_action_func, render_training=self._config.render_training, render_evaluation=self._config.render_evaluation)
-        
+
         if not self._config.test:
             ddpg.train(self._config.output_folder)
         else:
             ddpg.evaluate(self._config.render_evaluation)
+
+        if self._config.task == "obstacleavoidisaaclab":
+            env.sim_app.close()
+
+    def isaaclab_env(self):
+        import argparse
+        from isaaclab.app import AppLauncher
+        from isaacsim.simulation_app import SimulationApp
+
+        args = argparse.Namespace(
+            num_envs=self._config.num_envs,
+            device=self._config.device,
+            headless=not self._config.render_training,
+        )
+
+        app_launcher = AppLauncher(args)
+        sim_app: SimulationApp = app_launcher.app
+
+        import isaaclab.sim as sim_utils
+        from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
+        from isaaclab.actuators import ImplicitActuatorCfg
+        from isaaclab.assets import AssetBaseCfg
+        from isaaclab.assets.articulation import ArticulationCfg
+        from isaaclab.sensors import ContactSensorCfg
+
+        # HACK https://github.com/isaac-sim/IsaacLab/discussions/2256
+        # Setting enable_scene_query_support to true because lidar values were not being updated
+        # Also, add  "isaacsim.sensors.physx" = {}  inside of dependencies isaaclab.python.headless.kit 
+        sim_cfg = sim_utils.SimulationCfg(device=self._config.device, enable_scene_query_support=True)
+        sim_context = sim_utils.SimulationContext(sim_cfg)
+        sim_context.set_camera_view([3.5, 0.0, 3.2], [0.0, 0.0, 0.5])
+
+        TURTLEBOT_CONFIG = ArticulationCfg(
+            spawn=sim_utils.UsdFileCfg(usd_path=f"safe_exploration/env/turtlebot.usd", activate_contact_sensors=True),
+            actuators={"wheel_acts": ImplicitActuatorCfg(joint_names_expr=[".*"], damping=None, stiffness=None)},
+        )
+
+        class ObstacleAvoidCfg(InteractiveSceneCfg):
+            """Obstacle Avoid Scene."""
+
+            scene: AssetBaseCfg = AssetBaseCfg(
+                prim_path="{ENV_REGEX_NS}/Environment",
+                init_state=AssetBaseCfg.InitialStateCfg(
+                    pos=(0.0, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0)
+                ),
+                spawn=sim_utils.UsdFileCfg(usd_path="safe_exploration/env/obstacle_avoid.usd"),
+            )
+
+            Turtlebot: ArticulationCfg = TURTLEBOT_CONFIG.replace(prim_path="{ENV_REGEX_NS}/Turtlebot")
+
+            contact_forces_RW = ContactSensorCfg(
+                prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/wheel_right_link",
+                update_period=0.0,
+                history_length=6,
+                filter_prim_paths_expr=["{ENV_REGEX_NS}/Environment/Walls"],
+            )
+
+            contact_forces_LW = ContactSensorCfg(
+                prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/wheel_left_link",
+                update_period=0.0,
+                history_length=6,
+                filter_prim_paths_expr=["{ENV_REGEX_NS}/Environment/Walls"],
+            )
+
+            contact_forces_B = ContactSensorCfg(
+                prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/base_footprint",
+                update_period=0.0,
+                history_length=6,
+                filter_prim_paths_expr=["{ENV_REGEX_NS}/Environment/Walls"],
+            )
+
+        scene_cfg = ObstacleAvoidCfg(self._config.num_envs, env_spacing=2.0)
+        scene = InteractiveScene(scene_cfg)
+
+        sim_context.reset()
+
+        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene, self._config.render_training)
+        return env
 
 
 if __name__ == '__main__':

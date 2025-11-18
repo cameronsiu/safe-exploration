@@ -4,52 +4,6 @@ arguments:
   - name: "env"
     help: "Configuration related to simulation environments."
     properties:
-      - name: "spaceship"
-        help: "Spaceship environment configuration."
-        properties:
-          - name: "length"
-            default: 2.5
-          - name: "margin"
-            default: 0.2
-          - name: "agent_slack"
-            default: 0.05
-          - name: "frequency_ratio"
-            default: 0.1
-          - name: "target_noise_std"
-            default: 0.05
-          - name: "target_radius"
-            default: 0.05
-          - name: "corridor_episode_length"
-            default: 15
-          - name: "arena_episode_length"
-            default: 45
-          - name: "enable_reward_shaping"
-            default: false
-          - name: "is_arena"
-            default: true
-          - name: "reward_shaping_slack"
-            default: 0.1
-      - name: "ballnd"
-        help: "Ball-ND environment configuration."
-        properties:
-          - name: "n"
-            default: 2
-          - name: "target_margin"
-            default: 0.2
-          - name: "agent_slack"
-            default: 0.05
-          - name: "episode_length"
-            default: 30
-          - name: "frequency_ratio"
-            default: 0.1
-          - name: "respawn_interval"
-            default: 4
-          - name: "target_noise_std"
-            default: 0.05
-          - name: "enable_reward_shaping"
-            default: false
-          - name: "reward_shaping_slack"
-            default: 0.1
       - name: "obstacleavoid"
         help: "Avoiding obstacles while getting to a goal."
         properties:
@@ -71,6 +25,31 @@ arguments:
             default: 0.1
           - name: "action_scale"
             default: 0.3
+      - name: "obstacleavoidisaaclab"
+        help: "Avoiding obstacles while getting to a goal in isaaclab."
+        properties:
+          - name: "target_margin"
+            default: 0.2
+          - name: "agent_slack"
+            default: 0.05
+          - name: "episode_length"
+            default: 30
+          - name: "frequency_ratio"
+            default: 0.1
+          - name: "respawn_interval"
+            default: 4
+          - name: "target_noise_std"
+            default: 0.05
+          - name: "enable_reward_shaping"
+            default: false
+          - name: "reward_shaping_slack"
+            default: 0.1
+          - name: "action_scale"
+            default: 6.0
+          - name: "num_lidars"
+            default: 36
+          - name: "sim_dt"
+            default: 0.1
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -92,7 +71,7 @@ arguments:
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 100
+          default: 10
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
@@ -145,7 +124,7 @@ arguments:
           - name: "steps_per_epoch"
             default: 6000
           - name: "epochs"
-            default: 50
+            default: 5
           - name: "evaluation_steps"
             default: 1500
           - name: "replay_buffer_size"
@@ -161,7 +140,7 @@ arguments:
           - name: "seed"
             default: 0
           - name: "task"
-            default: "obstacleavoid"
+            default: "obstacleavoidisaaclab"
           - name: "use_safety_layer"
             default: true
           - name: "output_folder"
@@ -175,11 +154,15 @@ arguments:
           - name: "test"
             default: false
           - name: "safety_layer_only"
-            default: false 
-          - name: "train_safety_layer"
             default: false
+          - name: "train_safety_layer"
+            default: true
           - name: "render_training"
             default: false
           - name: "render_evaluation"
             default: false
+          - name: "device"
+            default: "cpu"
+          - name: "num_envs"
+            default: 1
 
