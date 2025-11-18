@@ -46,10 +46,14 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self.render_step = render_step
 
         from isaacsim.sensors.physx import _range_sensor
+        from safe_exploration.env.utils.obstacles_utils import _build_boxes_for_env, move_obstacles
 
         self.lidar_interface = _range_sensor.acquire_lidar_sensor_interface()
         # TODO: hardcode for now, not sure how to get prim paths properly here
         self.lidar_prim_path = "/World/envs/env_0/Turtlebot/turtlebot3_burger/base_footprint/base_link/base_scan/Lidar"
+
+        self.boxes_dict = _build_boxes_for_env()
+        self.move_obstacles = move_obstacles
 
         self.reset()
 
@@ -184,6 +188,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             turtlebot.set_joint_velocity_target(torch.tensor(action))
             self.scene.write_data_to_sim()
             self.sim_context.step(self.render_step)
+            self.move_obstacles(self.sim_dt, self.boxes_dict)
 
             self._agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
 

@@ -150,21 +150,39 @@ class Trainer:
                 prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/wheel_right_link",
                 update_period=0.0,
                 history_length=6,
-                filter_prim_paths_expr=["{ENV_REGEX_NS}/Environment/Walls"],
+                filter_prim_paths_expr=[
+                    "{ENV_REGEX_NS}/Environment/Walls",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_00",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_01",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_02",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_03",
+                ],
             )
 
             contact_forces_LW = ContactSensorCfg(
                 prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/wheel_left_link",
                 update_period=0.0,
                 history_length=6,
-                filter_prim_paths_expr=["{ENV_REGEX_NS}/Environment/Walls"],
+                filter_prim_paths_expr=[
+                    "{ENV_REGEX_NS}/Environment/Walls",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_00",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_01",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_02",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_03",
+                ],
             )
 
             contact_forces_B = ContactSensorCfg(
                 prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/base_footprint",
                 update_period=0.0,
                 history_length=6,
-                filter_prim_paths_expr=["{ENV_REGEX_NS}/Environment/Walls"],
+                filter_prim_paths_expr=[
+                    "{ENV_REGEX_NS}/Environment/Walls",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_00",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_01",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_02",
+                    "{ENV_REGEX_NS}/Environment/Movers/box_03",
+                ],
             )
 
         scene_cfg = ObstacleAvoidCfg(self._config.num_envs, env_spacing=2.0)
