@@ -11,6 +11,7 @@ from safe_exploration.core.config import Config
 from safe_exploration.core.replay_buffer import ReplayBuffer
 from safe_exploration.core.tensorboard import TensorBoard
 from safe_exploration.utils.list import for_each, select_with_predicate
+from safe_exploration.utils.frequency_counter import FrequencyCounter
 
 class DDPG:
     def __init__(self,
@@ -57,6 +58,8 @@ class DDPG:
         self._logging_time = 0
         self._target_compute_time = 0
         self._target_copy_time = 0
+
+        self._sample_counter = FrequencyCounter()
 
     def _as_tensor(self, ndarray, requires_grad=False):
         tensor = torch.Tensor(ndarray)
@@ -205,7 +208,7 @@ class DDPG:
         for step in range(self._config.evaluation_steps):
             action = self._get_action(observation, c, is_training=False)
             episode_action += np.absolute(action)
-            observation, reward, done, _ = self._env.step(action)
+            observation, reward, done, _ = self._env.step(action, render)
             
             if render:
                 self._env.render_env()
@@ -278,11 +281,16 @@ class DDPG:
             # Randomly sample episode_ for some initial steps
             action = self._env.action_space.sample() if step < self._config.start_steps \
                      else self._get_action(observation, c)
+            
+            # print(action)
 
-            if step > self._config.start_steps and self._render_training:
+            render = step > self._config.start_steps and self._render_training
+
+            if render:
                 self._env.render_env()
 
-            observation_next, reward, done, _ = self._env.step(action)
+            observation_next, reward, done, _ = self._env.step(action, render)
+            self._sample_counter.record()
 
             episode_reward += reward
             episode_length += 1
@@ -305,6 +313,9 @@ class DDPG:
 
             if np.any(c > 0):
                 violations += 1
+
+            if step % 1000 == 0:
+                print(self._sample_counter.frequency())
 
             # Make all updates at the end of the episode
             if done or (episode_length == self._config.max_episode_length):
@@ -333,19 +344,22 @@ class DDPG:
                 eval_start = time.time()
                 epoch_number = int(step / self._config.steps_per_epoch)
                 print(f"Finished epoch {epoch_number}. Running validation ...")
-                self.evaluate(self._render_evaluation)
+                self.evaluate(self._render_evaluation % 5 == 0)
                 eval_end = time.time()
                 time_eval += eval_end - eval_start
-                print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
+                #print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
 
-                print(f"batch sample: {self._batch_sample_time * 1000:.2}")
-                print(f"tensor convert: {self._tensor_convert_time * 1000:.2}")
-                print(f"actor update: {self._actor_update_time * 1000:.2}")
-                print(f"critic update: {self._critic_update_time * 1000:.2}")
-                print(f"logging: {self._logging_time * 1000:.2}")
-                print(f"target copy: {self._target_compute_time * 1000:.2}")
-                print(f"target compute: {self._target_copy_time * 1000:.2}")
+                #print(f"batch sample: {self._batch_sample_time * 1000:.2}")
+                #print(f"tensor convert: {self._tensor_convert_time * 1000:.2}")
+                #print(f"actor update: {self._actor_update_time * 1000:.2}")
+                #print(f"critic update: {self._critic_update_time * 1000:.2}")
+                #print(f"logging: {self._logging_time * 1000:.2}")
+                #print(f"target copy: {self._target_compute_time * 1000:.2}")
+                #print(f"target compute: {self._target_copy_time * 1000:.2}")
                 print("----------------------------------------------------------")
+
+                self._actor.save(output_folder)
+                self._critic.save(output_folder)
             
             previous_done = done
         

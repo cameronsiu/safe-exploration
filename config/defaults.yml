@@ -34,8 +34,8 @@ arguments:
             default: 0.05
           - name: "episode_length"
             default: 30
-          - name: "frequency_ratio"
-            default: 0.1
+          - name: "action_ratio"
+            default: 6
           - name: "respawn_interval"
             default: 4
           - name: "target_noise_std"
@@ -48,8 +48,6 @@ arguments:
             default: 6.0
           - name: "num_lidars"
             default: 36
-          - name: "sim_dt"
-            default: 0.1
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -71,7 +69,7 @@ arguments:
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 100
+          default: 30
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
@@ -124,7 +122,7 @@ arguments:
           - name: "steps_per_epoch"
             default: 6000
           - name: "epochs"
-            default: 50
+            default: 10
           - name: "evaluation_steps"
             default: 1500
           - name: "replay_buffer_size"
@@ -142,7 +140,7 @@ arguments:
           - name: "task"
             default: "obstacleavoidisaaclab"
           - name: "use_safety_layer"
-            default: true
+            default: false
           - name: "output_folder"
             default: "./output"
           - name: "actor_model_file"
@@ -165,4 +163,6 @@ arguments:
             default: "cpu"
           - name: "num_envs"
             default: 1
+          - name: "headless"
+            default: true
 

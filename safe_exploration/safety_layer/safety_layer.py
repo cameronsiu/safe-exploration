@@ -23,8 +23,7 @@ class SafetyLayer:
         if self._num_constraints != len(constraint_model_files):
             constraint_model_files = [None]*self._num_constraints
 
-        #self._features = ["lidar_readings_x", "lidar_readings_y"]
-        self._features = ["lidar_readings"]
+        self._features = ["lidar_readings", "agent_orientation"]
 
         self._initialize_constraint_models(constraint_model_files)
 
@@ -84,7 +83,7 @@ class SafetyLayer:
             action = self._env.action_space.sample()
             action = action + bias_direction
             c = self._env.get_constraint_values()
-            observation_next, _, done, _ = self._env.step(action)
+            observation_next, _, done, _ = self._env.step(action, self._render)
             c_next = self._env.get_constraint_values()
 
             if self._render:
@@ -99,7 +98,7 @@ class SafetyLayer:
                 "c_next": c_next 
             })
             
-            observation = observation_next            
+            observation = observation_next
             episode_length += 1
             
             if done or (episode_length == self._config.max_episode_length):
@@ -166,13 +165,6 @@ class SafetyLayer:
 
         # Find the lagrange multipliers
         g = [x.data.numpy().reshape(-1) for x in g]
-
-        #g = [
-        #    np.array([0.1, 0]),
-        #    np.array([0, 0.1]),
-        #    np.array([-0.1, 0]),
-        #    np.array([0, -0.1]),
-        #]
 
         unclipped_multipliers = [(np.dot(g_i, action) + c_i) / np.dot(g_i, g_i) for g_i, c_i in zip(g, c)]
         multipliers = [np.clip(x, 0, np.inf) for x in unclipped_multipliers]

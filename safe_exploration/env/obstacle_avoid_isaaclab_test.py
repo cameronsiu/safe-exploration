@@ -35,7 +35,7 @@ from isaaclab.sensors import ContactSensorCfg, ContactSensor
 from isaacsim.sensors.physx import _range_sensor
 
 TURTLEBOT_CONFIG = ArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(usd_path=f"scripts/tutorials/06_test/turtlebot.usd", activate_contact_sensors=True),
+    spawn=sim_utils.UsdFileCfg(usd_path=f"safe_exploration/env/turtlebot.usd", activate_contact_sensors=True),
     actuators={"wheel_acts": ImplicitActuatorCfg(joint_names_expr=[".*"], damping=None, stiffness=None)},
 )
 
@@ -47,7 +47,7 @@ class ObstacleAvoidCfg(InteractiveSceneCfg):
         init_state=AssetBaseCfg.InitialStateCfg(
             pos=(0.0, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0)
         ),
-        spawn=sim_utils.UsdFileCfg(usd_path="scripts/tutorials/06_test/obstacle_avoid.usd"),
+        spawn=sim_utils.UsdFileCfg(usd_path="safe_exploration/env/obstacle_avoid.usd"),
     )
 
     Turtlebot: ArticulationCfg = TURTLEBOT_CONFIG.replace(prim_path="{ENV_REGEX_NS}/Turtlebot")
@@ -115,7 +115,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     lidar_interface = _range_sensor.acquire_lidar_sensor_interface()
 
     # TODO: hardcode for now, not sure how to get prim paths properly here
-    lidar_prim_path = "/World/envs/env_0/Turtlebot/turtlebot3_burger/Lidar"
+    lidar_prim_path = "/World/envs/env_0/Turtlebot/turtlebot3_burger/base_footprint/base_link/base_scan/Lidar"
     NUM_LIDARS = 300 // 10 # 10 is the amount we skip
 
     count = 0
