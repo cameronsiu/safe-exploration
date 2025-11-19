@@ -120,15 +120,20 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
 
     count = 0
 
+    action = torch.Tensor([[6.0, 6.0]])
+    turtlebot.set_joint_velocity_target(action)
+    scene.write_data_to_sim()
+
     while simulation_app.is_running():
-        if args_cli.debug:
-            debug_turtlebot(turtlebot)
+        #if args_cli.debug:
+        debug_turtlebot(turtlebot)
 
-        if count == 0:
-            action = torch.Tensor([[6.0, 6.0]])
-            turtlebot.set_joint_velocity_target(action)
-            scene.write_data_to_sim()
-
+        if count % 50 == 0:
+            # TODO: See how step works?
+            #scene.write_data_to_sim()
+            count = 0
+            scene.update(0.00001)
+        
         # reset
         # if count % 500 == 0:
         #     # reset counters
@@ -156,7 +161,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
 
         # NOTE: depth data from IsaacSim is a numpy array
         depth: np.ndarray = lidar_interface.get_linear_depth_data(lidar_prim_path)
-        depth = depth.reshape(-1)[::NUM_LIDARS]
 
         # contact_forces_base: ContactSensor = scene["contact_forces_B"]
         # contact_forces_left_wheel: ContactSensor = scene["contact_forces_LW"]
@@ -186,10 +190,9 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
         #     # print(contact_forces_left_wheel.data.net_forces_w)
         #     # print(contact_forces_right_wheel.data.net_forces_w)
 
-
         sim.step()
         count += 1
-        scene.update(sim_dt)
+        # scene.update(0.00001)
 
 
 def main():

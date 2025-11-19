@@ -18,7 +18,7 @@ from safe_exploration.core.config import Config
 
 class ObstacleAvoidIsaacLab(gym.Env):
 
-    def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene):
+    def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene, render_step: bool):
         self._config = Config.get().env.obstacleavoidisaaclab
         self._action_scale = self._config.action_scale
 
@@ -48,6 +48,9 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self.sim_dt = self.sim_context.get_physics_dt()
         self.scene = scene
         self.action_ratio = self._config.action_ratio
+
+        # Render Sim steps
+        self.render_step = render_step
 
         from isaacsim.sensors.physx import _range_sensor
 
