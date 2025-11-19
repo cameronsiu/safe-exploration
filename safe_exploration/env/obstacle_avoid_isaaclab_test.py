@@ -116,6 +116,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
 
     # TODO: hardcode for now, not sure how to get prim paths properly here
     lidar_prim_path = "/World/envs/env_0/Turtlebot/turtlebot3_burger/base_footprint/base_link/base_scan/Lidar"
+    NUM_LIDARS = 300 // 10 # 10 is the amount we skip
 
     count = 0
 

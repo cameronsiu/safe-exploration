@@ -108,7 +108,7 @@ class Trainer:
         args = argparse.Namespace(
             num_envs=self._config.num_envs,
             device=self._config.device,
-            headless=not self._config.render_training,
+            headless=self._config.headless,
         )
 
         app_launcher = AppLauncher(args)
@@ -172,7 +172,7 @@ class Trainer:
 
         sim_context.reset()
 
-        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene, self._config.render_training)
+        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene)
         return env
 
 
