@@ -172,7 +172,7 @@ class Trainer:
 
         sim_context.reset()
 
-        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene, self._config.render_training)
+        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene)
         return env
 
 
