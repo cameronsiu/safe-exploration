@@ -46,8 +46,8 @@ arguments:
             default: 0.1
           - name: "action_scale"
             default: 6.0
-          - name: "num_lidars"
-            default: 36
+          - name: "num_lidar_buckets"
+            default: 9
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -89,15 +89,15 @@ arguments:
         - name: "critic_lr"
           default: 0.001
         - name: "start_steps"
-          default: 500
+          default: 1000
         - name: "action_noise_range"
-          default: 0.01
+          default: 0.1
         - name: "use_gpu"
           default: false
         - name: "reward_scale"
           default: 1
         - name: "max_updates_per_episode"
-          default: 10
+          default: 20
         - name: "min_buffer_fill"
           default: 2000
   - name: "safety_layer"

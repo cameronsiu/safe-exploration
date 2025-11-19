@@ -23,7 +23,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self._action_scale = self._config.action_scale
 
         # NOTE: use IsaacSim to change the lidar in simulation and replace parameter in yaml
-        self._num_lidar_buckets = self._config.num_lidars
+        self._num_lidar_buckets = self._config.num_lidar_buckets
 
         # NOTE: turtlebot will apply velocity commands to wheel joints independently
         # TODO: We can change this to be more like ROS2
@@ -39,7 +39,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             'agent_position': Box(low=-self.walls_half_length, high=self.walls_half_length, shape=(2,), dtype=np.float32),
             'agent_heading': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
             'target_position': Box(low=-8, high=8, shape=(2,), dtype=np.float32),
-            #'lidar_readings': Box(low=0.2, high=15, shape=(self._num_lidar_buckets,), dtype=np.float32)
+            'lidar_readings': Box(low=0.2, high=15, shape=(self._num_lidar_buckets,), dtype=np.float32)
         })
 
         ## Isaac Sim
@@ -76,7 +76,10 @@ class ObstacleAvoidIsaacLab(gym.Env):
             self._lidar_measure_time = self._current_time
             return self._lidar_readings
         else:
-            self._lidar_readings: np.ndarray = self.lidar_interface.get_linear_depth_data(self.lidar_prim_path).reshape(-1)
+            raw_lidar_readings: np.ndarray = self.lidar_interface.get_linear_depth_data(self.lidar_prim_path).reshape(-1)
+            bucket_size = raw_lidar_readings.shape[0] // self._num_lidar_buckets
+            bucketed_lidar_readings = raw_lidar_readings.reshape((self._num_lidar_buckets, bucket_size))
+            self._lidar_readings = np.min(bucketed_lidar_readings, axis=1)
             self._lidar_measure_time = self._current_time
             return self._lidar_readings
 
@@ -223,7 +226,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
                 "agent_position": self._agent_position,
                 "agent_orientation": np.array([x_orientation, y_orientation]),
                 "target_position": self._get_noisy_target_position(),
-                #"lidar_readings": lidar_readings
+                "lidar_readings": lidar_readings
             }
 
             # TODO: Check if IsaacLab collider returns true/false
