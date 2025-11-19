@@ -27,13 +27,21 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # NOTE: turtlebot will apply velocity commands to wheel joints independently
         # TODO: We can change this to be more like ROS2
         self.action_space = Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32)
+
+        self.arena_size = self._config.arena_size
+        self.arena_buffer_size = self.arena_size*0.2
         
         # NOTE: Not sure to include z value
         # TODO: Use parameters for boundaries
         self.observation_space = Dict({
-            'agent_position': Box(low=-10, high=10, shape=(2,), dtype=np.float32),
-            'target_position': Box(low=-8, high=8, shape=(2,), dtype=np.float32),
-            'lidar_readings': Box(low=0.2, high=15, shape=(self._num_lidar_buckets,), dtype=np.float32)
+            'agent_position': Box(low=-self.arena_size, high=self.arena_size, shape=(2,), dtype=np.float32),
+            'target_position': Box(
+                low=-(self.arena_size - self.arena_buffer_size),
+                high=self.arena_size - self.arena_buffer_size,
+                shape=(2,), 
+                dtype=np.float32
+            ),
+            'lidar_readings': Box(low=0.2, high=100, shape=(self._num_lidar_buckets,), dtype=np.float32)
         })
 
         ## Isaac Sim
@@ -55,7 +63,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # NOTE: Hardcoded for now
         obstacles_prim_path = f"/World/envs/env_0/Obstacles"
         if self._config.num_obstacles:
-            self.boxes_dict = build_boxes_for_env(self._config.num_obstacles, obstacles_prim_path)
+            self.boxes_dict = build_boxes_for_env(self._config.num_obstacles, obstacles_prim_path, self.arena_size)
             self.move_obstacles = move_obstacles
 
         self.reset()
@@ -92,9 +100,9 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
         # If agent is in top half, target goes bottom
         if agent_y > 0:
-            self._target_position = self._sample_position(-10, -2)
+            self._target_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
         else:
-            self._target_position = self._sample_position(2, 10)
+            self._target_position = self._sample_position(self.arena_buffer_size, self.arena_size)
 
     def _did_agent_collide(self) -> bool:
         contact_forces_base: ContactSensor = self.scene["contact_forces_B"]
@@ -117,10 +125,10 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
     def _sample_position(self, y_min: float, y_max: float, margin:float=1.0):
         """
-        Sample a (x,y) in [-10,10] x [-10,10] but restricted to a y-band.
-        margin avoids spawning at walls.
+        Sample a (x,y) in [-self.arena_size,self.arena_size] x [-self.arena_size,self.arena_size] 
+        but restricted to a y-band. margin avoids spawning at walls.
         """
-        x = np.random.uniform(-10 + margin, 10 - margin)
+        x = np.random.uniform(-self.arena_size + margin, self.arena_size - margin)
         y = np.random.uniform(y_min + margin, y_max - margin)
         return np.array([x, y], dtype=np.float32)
 
@@ -136,8 +144,8 @@ class ObstacleAvoidIsaacLab(gym.Env):
         Resets the agent in either the top or bottom half of the map,
         and places the target in the opposite half.
         Coordinate system:
-            x ∈ [-10,10]
-            y ∈ [-10,10]   (origin at center)
+            x ∈ [-self.arena_size,self.arena_size]
+            y ∈ [-self.arena_size,self.arena_size]   (origin at center)
         """
         turtlebot: Articulation = self.scene["Turtlebot"]
 
@@ -145,11 +153,11 @@ class ObstacleAvoidIsaacLab(gym.Env):
         agent_on_top = np.random.rand() > 0.5
 
         if agent_on_top:
-            self._agent_position = self._sample_position(2, 10)
-            self._target_position = self._sample_position(-10, -2)
+            self._agent_position = self._sample_position(self.arena_buffer_size, self.arena_size)
+            self._target_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
         else:
-            self._agent_position = self._sample_position(-10, -2)
-            self._target_position = self._sample_position(2, 10)
+            self._agent_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
+            self._target_position = self._sample_position(self.arena_buffer_size, self.arena_size)
 
         # Write the agent pose into IsaacSim
         root_state = turtlebot.data.default_root_state.clone()
@@ -193,7 +201,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             self.sim_context.step(self.render_step)
 
             if self._config.num_obstacles:
-                self.move_obstacles(self.sim_dt, self.boxes_dict)
+                self.move_obstacles(self.sim_dt, self.boxes_dict, self.arena_size)
 
             self._agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
 

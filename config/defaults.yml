@@ -55,7 +55,9 @@ arguments:
           - name: "num_envs"
             default: 1
           - name: "num_obstacles"
-            default: 10
+            default: 1
+          - name: "arena_size"
+            default: 5
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:

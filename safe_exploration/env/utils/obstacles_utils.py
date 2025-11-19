@@ -9,15 +9,14 @@ SPEED_MIN          = 0.2       # m/s
 SPEED_MAX          = 0.2       # m/s
 JITTER_STD         = 0.25      # rad/s-equivalent heading jitter
 BOUNCE_GAIN        = 1.0       # reflection gain
-ARENA_HALF         = 10.0      # env-local square half-size in XY
 SEED               = 42
 
 np.random.seed(SEED)
 
 ## Creating Obstacles
-def build_boxes_for_env(num_obstacles: int, obstacles_prim_path: str):
+def build_boxes_for_env(num_obstacles: int, obstacles_prim_path: str, arena_size: int):
     """Create 4 walls and 4 moving obstacles (kinematic RBs) inside env (env-local coords)."""
-    L = ARENA_HALF
+    L = arena_size
 
     # Movers
     boxes, velxy, locpos = [], [], []
@@ -74,11 +73,11 @@ def _set_kinematic_target_xy(path: str, x: float, y: float, z_fixed: float):
             _warned_kt = True
         _set_local_xy(path, x, y, z_fixed)
 
-def move_obstacles(sim_dt: float, boxes_dict: dict):
+def move_obstacles(sim_dt: float, boxes_dict: dict, arena_size: int):
     # Local bounds for reflection
     half = BOX_SIZE * 0.5
-    local_min = -(ARENA_HALF - half)
-    local_max = +(ARENA_HALF - half)
+    local_min = -(arena_size - half)
+    local_max = +(arena_size - half)
     z_fixed = BOX_SIZE * 0.5 + 0.01
 
     dt = sim_dt
