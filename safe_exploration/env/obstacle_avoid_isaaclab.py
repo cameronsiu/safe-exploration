@@ -37,7 +37,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
         self.observation_space = Dict({
             'agent_position': Box(low=-self.walls_half_length, high=self.walls_half_length, shape=(2,), dtype=np.float32),
-            'agent_heading': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
+            'agent_orientation': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
             'target_position': Box(low=-8, high=8, shape=(2,), dtype=np.float32),
             'lidar_readings': Box(low=0.2, high=15, shape=(self._num_lidar_buckets,), dtype=np.float32)
         })
@@ -92,9 +92,11 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
         # If agent is in top half, target goes bottom
         if agent_y > 0:
-            self._target_position = self._sample_position(-self.walls_half_length, -2)
+            self._target_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
         else:
-            self._target_position = self._sample_position(2, self.walls_half_length)
+            self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
+
+        # print(self._target_position)
 
     def _did_agent_collide(self) -> bool:
         contact_forces_base: ContactSensor = self.scene["contact_forces_B"]
@@ -114,12 +116,14 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # TODO: Not sure if this is correct
         self._current_time += self.sim_dt
 
-    def _sample_position(self, y_min: float, y_max: float, margin:float=1.0):
+    def _sample_position(self, y_min: float, y_max: float, margin:float=1.0, x_min: float = None, x_max: float = None):
         """
         Sample a (x,y) in [-10,10] x [-10,10] but restricted to a y-band.
         margin avoids spawning at walls.
         """
-        x = np.random.uniform(-self.walls_half_length + margin, self.walls_half_length - margin)
+        x_min = x_min or -self.walls_half_length
+        x_max = x_max or self.walls_half_length
+        x = np.random.uniform(x_min + margin, x_max - margin)
         y = np.random.uniform(y_min + margin, y_max - margin)
         return np.array([x, y], dtype=np.float32)
 
@@ -145,12 +149,13 @@ class ObstacleAvoidIsaacLab(gym.Env):
         agent_on_top = np.random.rand() > 0.5
 
         if agent_on_top:
-            self._agent_position = self._sample_position(2, self.walls_half_length)
-            self._target_position = self._sample_position(-self.walls_half_length, -2)
+            self._agent_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
+            self._target_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
         else:
-            self._agent_position = self._sample_position(-self.walls_half_length, -2)
-            self._target_position = self._sample_position(2, self.walls_half_length)
+            self._agent_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
+            self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
 
+        # print(self._target_position)
         heading = np.random.random() * 2 * np.pi
         q = torch.tensor([np.cos(heading / 2), 0, 0, np.sin(heading / 2)])
 
@@ -209,13 +214,13 @@ class ObstacleAvoidIsaacLab(gym.Env):
             self._agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
             self._agent_heading = turtlebot.data.heading_w.reshape(-1)[0].cpu().numpy()
 
-            #print(f"Target Vector: {self._target_position - self._agent_position}")
-            #print(f"Distance: {np.linalg.norm(self._agent_position - self._target_position)}")
+            # print(f"Target Vector: {self._target_position}")
+            # print(f"Distance: {np.linalg.norm(self._agent_position - self._target_position)}")
 
             # print(f"Agent starts at {initial_position}, moved to {self._agent_position}")
 
             reward = self._get_reward(initial_position, self._agent_position)
-            #print(f"Reward: {reward}")
+            # print(f"Reward: {reward}")
 
             lidar_readings: np.ndarray = self._get_lidar_readings()
 

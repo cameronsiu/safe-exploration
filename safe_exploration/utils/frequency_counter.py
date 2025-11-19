@@ -2,7 +2,7 @@ import time
 
 class FrequencyCounter:
     def __init__(self):
-        self._length = 10
+        self._length = 50
         self._timings = [None] * self._length
         self._index = 0
 

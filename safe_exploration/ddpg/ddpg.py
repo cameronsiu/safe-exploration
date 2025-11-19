@@ -314,9 +314,6 @@ class DDPG:
             if np.any(c > 0):
                 violations += 1
 
-            if step % 1000 == 0:
-                print(self._sample_counter.frequency())
-
             # Make all updates at the end of the episode
             if done or (episode_length == self._config.max_episode_length):
                 if step >= self._config.min_buffer_fill and (step - step_trained_on) >= self._config.max_episode_length:
@@ -347,6 +344,7 @@ class DDPG:
                 self.evaluate(self._render_evaluation % 5 == 0)
                 eval_end = time.time()
                 time_eval += eval_end - eval_start
+                print(f"Recent Frame Rate: {self._sample_counter.frequency()}")
                 #print(f"Simulating: {time_simulating:.2}, Training: {time_training:.2}, Eval: {time_eval:.2}")
 
                 #print(f"batch sample: {self._batch_sample_time * 1000:.2}")
