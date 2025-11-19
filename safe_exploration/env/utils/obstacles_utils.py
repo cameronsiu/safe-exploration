@@ -4,10 +4,9 @@ import omni
 from pxr import UsdGeom, Gf, UsdPhysics, Usd, Sdf
 from omni.physx.scripts import utils as physx_utils
 
-NUM_MOVERS_PER_ENV = 4
 BOX_SIZE           = 1.0       # m
-SPEED_MIN          = 0.25       # m/s
-SPEED_MAX          = 1.0       # m/s
+SPEED_MIN          = 0.2       # m/s
+SPEED_MAX          = 0.2       # m/s
 JITTER_STD         = 0.25      # rad/s-equivalent heading jitter
 BOUNCE_GAIN        = 1.0       # reflection gain
 ARENA_HALF         = 10.0      # env-local square half-size in XY
@@ -16,82 +15,19 @@ SEED               = 42
 np.random.seed(SEED)
 
 ## Creating Obstacles
-
-def _mk_xform(path: Sdf.Path):
-    stage = omni.usd.get_context().get_stage()
-    prim = stage.GetPrimAtPath(path)
-    if not prim or not prim.IsValid():
-        prim = stage.DefinePrim(path, "Xform")
-    return UsdGeom.Xformable(prim)
-
-def _spawn_cube(path: str, center_xyz, size_xyz, visible=True):
-    """
-    Spawn (or update) an Xform + UsdGeom.Cube at `path`, scaled to size_xyz and translated to center_xyz.
-    Reuses xform ops if present (avoid duplicate op errors).
-    """
-    stage = omni.usd.get_context().get_stage()
-    _mk_xform(Sdf.Path(path))
-    geom_path = f"{path}/geom"
-    cube = UsdGeom.Cube.Get(stage, Sdf.Path(geom_path))
-    if not cube:
-        cube = UsdGeom.Cube.Define(stage, Sdf.Path(geom_path))
-        cube.CreateSizeAttr(1.0)  # scale via xform ops
-
-    xformable = UsdGeom.Xformable(stage.GetPrimAtPath(path))
-    existing_ops = {op.GetOpName(): op for op in xformable.GetOrderedXformOps()}
-    xf_op = existing_ops.get("xformOp:transform") or xformable.AddTransformOp()
-    sc_op = existing_ops.get("xformOp:scale") or xformable.AddScaleOp()
-    xformable.SetXformOpOrder([xf_op, sc_op])
-    xf_op.Set(Gf.Matrix4d().SetTranslate(Gf.Vec3d(*center_xyz)))
-    sc_op.Set(Gf.Vec3f(size_xyz[0], size_xyz[1], size_xyz[2]))
-
-    cube.CreateVisibilityAttr().Set("inherited" if visible else "invisible")
-    return stage.GetPrimAtPath(path)
-
-def _add_moving_box_kinematic(path, center_xyz, edge_len, color=(0.6, 0.9, 0.9)):
-    """
-    Kinematic box:
-      - RigidBody parent (PhysX actor),
-      - Collider on GEOM with 'box' approx (PhysX LiDAR hit),
-      - Moved each tick via kinematic target (robot collides with it but can't push it).
-    """
-    prim = _spawn_cube(path, center_xyz, (edge_len, edge_len, edge_len), visible=True)
-
-    stage = omni.usd.get_context().get_stage()
-    geom_path = f"{path}/geom"
-    geom_prim = stage.GetPrimAtPath(geom_path)
-
-    # Visual color
-    if geom_prim and geom_prim.IsValid():
-        UsdGeom.Gprim(geom_prim).CreateDisplayColorAttr().Set([Gf.Vec3f(*color)])
-
-    # Collider on GEOM + explicit box approximation (critical for LiDAR)
-    UsdPhysics.CollisionAPI.Apply(geom_prim)
-    geom_prim.CreateAttribute("physics:approximation", Sdf.ValueTypeNames.Token).Set("box")
-
-    # Parent is a rigid body; mark it kinematic
-    UsdPhysics.RigidBodyAPI.Apply(prim)
-    prim.CreateAttribute("physics:kinematicEnabled", Sdf.ValueTypeNames.Bool).Set(True)
-
-    return prim
-
-def _build_boxes_for_env():
-    """Create 4 walls and 4 movers (kinematic RBs) inside env (env-local coords)."""
-    root = f"/World/envs/env_0/Environment"
-    movers_parent = f"{root}/Movers"
-
+def build_boxes_for_env(num_obstacles: int, obstacles_prim_path: str):
+    """Create 4 walls and 4 moving obstacles (kinematic RBs) inside env (env-local coords)."""
     L = ARENA_HALF
 
     # Movers
     boxes, velxy, locpos = [], [], []
     margin = BOX_SIZE * 0.5 + 0.2
     z_fixed = BOX_SIZE * 0.5 + 0.01
-    for k in range(NUM_MOVERS_PER_ENV):
+    for k in range(num_obstacles):
         x = np.random.uniform(-L + margin, L - margin)
         y = np.random.uniform(-L + margin, L - margin)
-        path = f"{movers_parent}/box_{k:02d}"
+        path = f"{obstacles_prim_path}/box_{k}"
         color = tuple(np.random.uniform(0.25, 0.9, size=3))
-        _add_moving_box_kinematic(path, [x, y, z_fixed], BOX_SIZE, color=color)
         boxes.append(path)
         locpos.append([x, y])
 
@@ -107,8 +43,7 @@ def _build_boxes_for_env():
 
     return boxes_dict
 
-## Moving Obstacles
-
+## Changing XForm of obstacles
 def _get_or_create_ops(path: str):
     stage = omni.usd.get_context().get_stage()
     xformable = UsdGeom.Xformable(stage.GetPrimAtPath(path))

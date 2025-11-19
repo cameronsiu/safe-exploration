@@ -50,6 +50,12 @@ arguments:
             default: 36
           - name: "sim_dt"
             default: 0.1
+          - name: "device"
+            default: "cpu"
+          - name: "num_envs"
+            default: 1
+          - name: "num_obstacles"
+            default: 10
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -161,8 +167,4 @@ arguments:
             default: false
           - name: "render_evaluation"
             default: false
-          - name: "device"
-            default: "cpu"
-          - name: "num_envs"
-            default: 1
 
