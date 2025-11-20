@@ -51,7 +51,7 @@ class Trainer:
         print(f"Loading constraint model files: {constraint_model_files}")
 
         if self._config.use_safety_layer:
-            safety_layer = SafetyLayer(env, constraint_model_files, render=False)
+            safety_layer = SafetyLayer(env, constraint_model_files, render=self._config.render_training)
             
             if self._config.train_safety_layer:
                 safety_layer.train(self._config.output_folder)
@@ -110,7 +110,7 @@ class Trainer:
         args = argparse.Namespace(
             num_envs=env_config.num_envs,
             device=env_config.device,
-            headless=not self._config.render_training,
+            headless=env_config.headless,
         )
 
         app_launcher = AppLauncher(args)
@@ -142,14 +142,20 @@ class Trainer:
         filter_prim_paths_expr = ["{ENV_REGEX_NS}/Environment/Walls"]
         rigid_objects = {}
         obstacles = None
+        arena_half = env_config.arena_size // 2
+        margin = env_config.obstacle_size * 0.5 + 0.2
+        obstacle_positions = []
         for i in range(env_config.num_obstacles):
+            x = np.random.uniform(-arena_half + margin, arena_half - margin)
+            y = np.random.uniform(-arena_half + margin, arena_half - margin)
+            z = env_config.obstacle_size / 2 + 0.05
             prim_path = "{ENV_REGEX_NS}/Obstacles/box_" + str(i)
             rigid_objects[f"box_{i}"] = RigidObjectCfg(
                 init_state=RigidObjectCfg.InitialStateCfg(
-                    pos=(1.0, 1.0, 0.5)
+                    pos=(x, y, z)
                 ),
                 spawn=sim_utils.CuboidCfg(
-                    size=(1.0, 1.0, 1.0),
+                    size=(env_config.obstacle_size, env_config.obstacle_size, env_config.obstacle_size),
                     rigid_props=sim_utils.RigidBodyPropertiesCfg(),
                     mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
                     collision_props=sim_utils.CollisionPropertiesCfg(),
@@ -157,6 +163,8 @@ class Trainer:
                 prim_path=prim_path,
             )
             filter_prim_paths_expr.append(prim_path)
+            obstacle_positions.append([x, y, z])
+
         if rigid_objects:
             obstacles = RigidObjectCollectionCfg(rigid_objects=rigid_objects)
 
@@ -201,7 +209,7 @@ class Trainer:
 
         sim_context.reset()
 
-        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene, self._config.render_training)
+        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene, obstacle_positions)
         return env
 
 

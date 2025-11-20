@@ -1,10 +1,9 @@
 import numpy as np
 import omni
 
-from pxr import UsdGeom, Gf, UsdPhysics, Usd, Sdf
+from pxr import UsdGeom, Gf
 from omni.physx.scripts import utils as physx_utils
 
-BOX_SIZE           = 1.0       # m
 SPEED_MIN          = 0.2       # m/s
 SPEED_MAX          = 0.2       # m/s
 JITTER_STD         = 0.25      # rad/s-equivalent heading jitter
@@ -14,33 +13,22 @@ SEED               = 42
 np.random.seed(SEED)
 
 ## Creating Obstacles
-def build_boxes_for_env(num_obstacles: int, obstacles_prim_path: str, arena_size: int):
-    """Create 4 walls and 4 moving obstacles (kinematic RBs) inside env (env-local coords)."""
-    L = arena_size
-
-    # Movers
-    boxes, velxy, locpos = [], [], []
-    margin = BOX_SIZE * 0.5 + 0.2
-    z_fixed = BOX_SIZE * 0.5 + 0.01
+def build_obstacles_for_env(num_obstacles: int, obstacles_prim_path: str, obstacle_positions: list):
+    obstacles_paths, velxy = [], []
     for k in range(num_obstacles):
-        x = np.random.uniform(-L + margin, L - margin)
-        y = np.random.uniform(-L + margin, L - margin)
         path = f"{obstacles_prim_path}/box_{k}"
-        color = tuple(np.random.uniform(0.25, 0.9, size=3))
-        boxes.append(path)
-        locpos.append([x, y])
-
+        obstacles_paths.append(path)
         speed = np.random.uniform(SPEED_MIN, SPEED_MAX)
         theta = np.random.uniform(-np.pi, np.pi)
         velxy.append([np.cos(theta) * speed, np.sin(theta) * speed])
 
-    boxes_dict = {
-        "box_paths": boxes,
+    obstacles = {
+        "obstacles_paths": obstacles_paths,
         "velxy": np.array(velxy, dtype=np.float32),
-        "locpos": np.array(locpos, dtype=np.float32)
+        "locpos": np.array(obstacle_positions, dtype=np.float32)
     }
 
-    return boxes_dict
+    return obstacles
 
 ## Changing XForm of obstacles
 def _get_or_create_ops(path: str):
@@ -56,12 +44,12 @@ def _set_local_xy(path: str, x: float, y: float, z_fixed: float):
     xf_op, _ = _get_or_create_ops(path)
     xf_op.Set(Gf.Matrix4d().SetTranslate(Gf.Vec3d(x, y, z_fixed)))
 
-def _set_kinematic_target_xy(path: str, x: float, y: float, z_fixed: float):
+def _set_kinematic_target_xy(path: str, x: float, y: float, z: float):
     stage = omni.usd.get_context().get_stage()
     prim = stage.GetPrimAtPath(path)
     if not prim or not prim.IsValid():
         return
-    tf = Gf.Matrix4d().SetTranslate(Gf.Vec3d(x, y, z_fixed))
+    tf = Gf.Matrix4d().SetTranslate(Gf.Vec3d(x, y, z))
     try:
         physx_utils.set_kinematic_target(prim, tf)
     except Exception as e:
@@ -71,20 +59,19 @@ def _set_kinematic_target_xy(path: str, x: float, y: float, z_fixed: float):
         if "_warned_kt" not in globals():
             print(f"[WARN] set_kinematic_target failed on {path}: {e}")
             _warned_kt = True
-        _set_local_xy(path, x, y, z_fixed)
+        _set_local_xy(path, x, y, z)
 
-def move_obstacles(sim_dt: float, boxes_dict: dict, arena_size: int):
+def move_obstacles(sim_dt: float, obstacles: dict, arena_size: int, box_size: int):
     # Local bounds for reflection
-    half = BOX_SIZE * 0.5
+    half = box_size * 0.5
     local_min = -(arena_size - half)
     local_max = +(arena_size - half)
-    z_fixed = BOX_SIZE * 0.5 + 0.01
 
     dt = sim_dt
 
     # 1) Animate movers FIRST (so PhysX sees new kinematic targets this step)
-    vel = boxes_dict["velxy"]
-    pos = boxes_dict["locpos"]
+    vel = obstacles["velxy"]
+    pos = obstacles["locpos"]
 
     # jitter small heading angles (random-walk feel)
     jitter = np.random.randn(len(vel)) * JITTER_STD * dt
@@ -109,5 +96,5 @@ def move_obstacles(sim_dt: float, boxes_dict: dict, arena_size: int):
     pos[over_min, 1] = local_min + (local_min - pos[over_min, 1])
     pos[over_max, 1] = local_max - (pos[over_max, 1] - local_max)
 
-    for k, prim_path in enumerate(boxes_dict["box_paths"]):
-        _set_kinematic_target_xy(prim_path, float(pos[k, 0]), float(pos[k, 1]), z_fixed)
+    for k, prim_path in enumerate(obstacles["obstacles_paths"]):
+        _set_kinematic_target_xy(prim_path, float(pos[k, 0]), float(pos[k, 1]), float(pos[k, 2]))
