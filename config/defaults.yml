@@ -51,13 +51,13 @@ arguments:
           - name: "device"
             default: "cpu"
           - name: "headless"
-            default: true
+            default: false
           - name: "num_envs"
             default: 1
           - name: "arena_size"
             default: 6
           - name: "num_obstacles"
-            default: 1
+            default: 0
           - name: "obstacle_size"
             default: 0.5
   - name: "ddpg"
@@ -81,7 +81,7 @@ arguments:
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 50
+          default: 15
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
@@ -162,7 +162,7 @@ arguments:
           - name: "constraint_model_files"
             default: "./output/constraint_*.pt"
           - name: "test"
-            default: false
+            default: true
           - name: "safety_layer_only"
             default: false
           - name: "train_safety_layer"
@@ -170,5 +170,5 @@ arguments:
           - name: "render_training"
             default: false
           - name: "render_evaluation"
-            default: false
+            default: true
 

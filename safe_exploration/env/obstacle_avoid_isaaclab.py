@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from isaacsim.simulation_app import SimulationApp
     from isaaclab.sim import SimulationContext
     from isaaclab.scene import InteractiveScene
+    from isaaclab.assets import RigidObject
     from isaaclab.assets.articulation import Articulation
     from isaaclab.sensors import ContactSensor
 
@@ -108,6 +109,11 @@ class ObstacleAvoidIsaacLab(gym.Env):
         else:
             self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
 
+        target: RigidObject = self.scene["target"]
+        target_pos = target.data.default_root_state.clone()
+        target_pos[:, :2] = torch.tensor(self._target_position)
+        target.write_root_pose_to_sim(target_pos[:, :7])
+
         # print(self._target_position)
 
     def _did_agent_collide(self) -> bool:
@@ -188,6 +194,11 @@ class ObstacleAvoidIsaacLab(gym.Env):
         turtlebot.write_joint_state_to_sim(joint_pos, joint_vel)
 
         self._agent_heading = turtlebot.data.heading_w.reshape(-1).cpu().numpy()
+
+        target: RigidObject = self.scene["target"]
+        target_pos = target.data.default_root_state.clone()
+        target_pos[:, :2] = torch.tensor(self._target_position)
+        target.write_root_pose_to_sim(target_pos[:, :7])
 
         # Reset timers
         self._current_time = 0.0

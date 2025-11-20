@@ -27,10 +27,12 @@ import torch
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
-from isaaclab.assets import AssetBaseCfg
+from isaaclab.assets import AssetBaseCfg, RigidObjectCfg, RigidObject
 from isaaclab.assets.articulation import Articulation, ArticulationCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg, ContactSensor
+from isaaclab.sim.spawners.shapes import SphereCfg
+
 
 from isaacsim.sensors.physx import _range_sensor
 
@@ -78,6 +80,17 @@ class ObstacleAvoidCfg(InteractiveSceneCfg):
         filter_prim_paths_expr=["{ENV_REGEX_NS}/Environment/Walls"],
     )
 
+    target = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/Target",
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.0, 0.0, 0.5)
+        ),
+        spawn=SphereCfg(
+            radius=0.15,
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(disable_gravity=True),
+        )
+    )
 
 def debug_turtlebot(turtlebot: Articulation):
     """Just for debuggint he turtlebot's position and velocity"""
@@ -109,6 +122,8 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     count = 0
 
     turtlebot: Articulation = scene["Turtlebot"]
+    target: RigidObject = scene["target"]
+    print(target)
 
     reset_turtlebot(scene, turtlebot)
     
@@ -126,25 +141,15 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
 
     while simulation_app.is_running():
         #if args_cli.debug:
-        debug_turtlebot(turtlebot)
+        #debug_turtlebot(turtlebot)
 
-        if count % 50 == 0:
-            # TODO: See how step works?
-            #scene.write_data_to_sim()
+        if count % 100 == 0:
+            target_pos = target.data.default_root_state.clone()
+            #breakpoint()
+            pos = torch.rand(2)
+            target_pos[:, :2] = pos
+            target.write_root_pose_to_sim(target_pos[:, :7])
             count = 0
-            scene.update(0.00001)
-        
-        # reset
-        # if count % 500 == 0:
-        #     # reset counters
-        #     count = 0
-            
-        #     # reset turtlebot
-        #     reset_turtlebot(scene, turtlebot)
-            
-        #     # clear internal buffers
-        #     scene.reset()
-        #     print("[INFO]: Resetting Turtlebot state...")
 
         # NOTE: cameron - ROS2 uses cmd_vel, so there must a conversion from 
         # joint velocity to linear/angular velocity
@@ -192,7 +197,8 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
 
         sim.step()
         count += 1
-        # scene.update(0.00001)
+        scene.write_data_to_sim()
+        scene.update(sim_dt)
 
 
 def main():
