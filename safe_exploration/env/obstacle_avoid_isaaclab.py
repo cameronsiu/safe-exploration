@@ -79,7 +79,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             final_distance = np.linalg.norm(final_position - self._target_position)
             neg_distance_change = initial_distance - final_distance
 
-            return neg_distance_change * 100
+            return neg_distance_change * 10
 
     def _get_lidar_readings(self) -> np.ndarray:
         if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
@@ -104,10 +104,14 @@ class ObstacleAvoidIsaacLab(gym.Env):
         agent_y = self._agent_position[1]
 
         # If agent is in top half, target goes bottom
+        # if agent_y > 0:
+        #     self._target_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
+        # else:
+        #     self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
         if agent_y > 0:
-            self._target_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
+            self._target_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
         else:
-            self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
+            self._target_position = self._sample_position(self.arena_buffer_size, self.arena_size)
 
         target: RigidObject = self.scene["target"]
         target_pos = target.data.default_root_state.clone()
@@ -165,12 +169,18 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # Randomly decide agent region (top or bottom)
         agent_on_top = np.random.rand() > 0.5
 
+        # if agent_on_top:
+        #     self._agent_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
+        #     self._target_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
+        # else:
+        #     self._agent_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
+        #     self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
         if agent_on_top:
-            self._agent_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
-            self._target_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
+            self._agent_position = self._sample_position(self.arena_buffer_size, self.arena_size)
+            self._target_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
         else:
-            self._agent_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
-            self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
+            self._agent_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
+            self._target_position = self._sample_position(self.arena_buffer_size, self.arena_size)
 
         # print(self._target_position)
         heading = np.random.random() * 2 * np.pi
