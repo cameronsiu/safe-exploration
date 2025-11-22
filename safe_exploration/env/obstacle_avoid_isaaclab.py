@@ -23,22 +23,19 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self._config = Config.get().env.obstacleavoidisaaclab
         self._action_scale = self._config.action_scale
 
-        # NOTE: use IsaacSim to change the lidar in simulation and replace parameter in yaml
+        # NOTE: use IsaacSim to change the number of lidars and change the parameter in yaml
         self._num_lidar_buckets = self._config.num_lidar_buckets
 
         # NOTE: turtlebot will apply velocity commands to wheel joints independently
-        # TODO: We can change this to be more like ROS2
         self.action_space = Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32)
 
         self.arena_size = self._config.arena_size // 2
         self.arena_buffer_size = self.arena_size*0.2
 
-        # NOTE: Not sure to include z value
-        # TODO: Use parameters for boundaries
-
         self.observation_space = Dict({
             'agent_position': Box(low=-self.arena_size, high=self.arena_size, shape=(2,), dtype=np.float32),
             'agent_orientation': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
+            'agent_velocity': Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32),
             'target_position': Box(
                 low=-(self.arena_size - self.arena_buffer_size),
                 high=self.arena_size - self.arena_buffer_size,
@@ -231,7 +228,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
                 self._reset_target_location()
 
-            turtlebot.set_joint_velocity_target(torch.tensor(action))
+            turtlebot.set_joint_velocity_target(torch.tensor(action / 0.033))
             self.scene.write_data_to_sim()
 
             #start_time = time.time()
@@ -269,6 +266,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             observation = {
                 "agent_position": self._agent_position,
                 "agent_orientation": np.array([x_orientation, y_orientation]),
+                "agent_velocity": action / 0.033,
                 "target_position": self._get_noisy_target_position(),
                 "lidar_readings": lidar_readings
             }

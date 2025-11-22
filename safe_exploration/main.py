@@ -123,7 +123,7 @@ class Trainer:
         from isaaclab.assets import AssetBaseCfg, RigidObjectCollectionCfg, RigidObjectCfg
         from isaaclab.assets.articulation import ArticulationCfg
         from isaaclab.sensors import ContactSensorCfg
-        from isaaclab.sim.spawners.shapes import SphereCfg
+        from isaaclab.sim.spawners.shapes import CylinderCfg
 
         # HACK https://github.com/isaac-sim/IsaacLab/discussions/2256
         # Setting enable_scene_query_support to true because lidar values were not being updated
@@ -208,10 +208,11 @@ class Trainer:
             target = RigidObjectCfg(
                 prim_path="{ENV_REGEX_NS}/Target",
                 init_state=RigidObjectCfg.InitialStateCfg(
-                    pos=(0.0, 0.0, 0.5)
+                    pos=(0.0, 0.0, 0.0)
                 ),
-                spawn=SphereCfg(
+                spawn=CylinderCfg(
                     radius=0.15,
+                    height=0.01,
                     visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
                     rigid_props=sim_utils.RigidBodyPropertiesCfg(disable_gravity=True),
                 )
