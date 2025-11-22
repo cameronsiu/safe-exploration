@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from isaacsim.simulation_app import SimulationApp
     from isaaclab.sim import SimulationContext
     from isaaclab.scene import InteractiveScene
+    from isaaclab.assets import RigidObject
     from isaaclab.assets.articulation import Articulation
     from isaaclab.sensors import ContactSensor
 
@@ -18,28 +19,30 @@ from safe_exploration.core.config import Config
 
 class ObstacleAvoidIsaacLab(gym.Env):
 
-    def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene):
+    def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene, obstacle_positions: list):
         self._config = Config.get().env.obstacleavoidisaaclab
         self._action_scale = self._config.action_scale
 
-        # NOTE: use IsaacSim to change the lidar in simulation and replace parameter in yaml
+        # NOTE: use IsaacSim to change the number of lidars and change the parameter in yaml
         self._num_lidar_buckets = self._config.num_lidar_buckets
 
         # NOTE: turtlebot will apply velocity commands to wheel joints independently
-        # TODO: We can change this to be more like ROS2
         self.action_space = Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32)
-        
-        # NOTE: Not sure to include z value
-        # TODO: Use parameters for boundaries
 
-        self.walls_half_length = 10
-        self.walls_length = self.walls_half_length * 2
+        self.arena_size = self._config.arena_size // 2
+        self.arena_buffer_size = self.arena_size*0.2
 
         self.observation_space = Dict({
-            'agent_position': Box(low=-self.walls_half_length, high=self.walls_half_length, shape=(2,), dtype=np.float32),
+            'agent_position': Box(low=-self.arena_size, high=self.arena_size, shape=(2,), dtype=np.float32),
             'agent_orientation': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
-            'target_position': Box(low=-8, high=8, shape=(2,), dtype=np.float32),
-            'lidar_readings': Box(low=0.2, high=15, shape=(self._num_lidar_buckets,), dtype=np.float32)
+            'agent_velocity': Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32),
+            'target_position': Box(
+                low=-(self.arena_size - self.arena_buffer_size),
+                high=self.arena_size - self.arena_buffer_size,
+                shape=(2,), 
+                dtype=np.float32
+            ),
+            'lidar_readings': Box(low=0.2, high=100, shape=(self._num_lidar_buckets,), dtype=np.float32)
         })
 
         ## Isaac Sim
@@ -50,10 +53,17 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self.action_ratio = self._config.action_ratio
 
         from isaacsim.sensors.physx import _range_sensor
+        from safe_exploration.env.utils.obstacles_utils import build_obstacles_for_env, move_obstacles
 
         self.lidar_interface = _range_sensor.acquire_lidar_sensor_interface()
         # TODO: hardcode for now, not sure how to get prim paths properly here
         self.lidar_prim_path = "/World/envs/env_0/Turtlebot/turtlebot3_burger/base_footprint/base_link/base_scan/Lidar"
+
+        # NOTE: Hardcoded for now
+        obstacles_prim_path = f"/World/envs/env_0/Obstacles"
+        if self._config.num_obstacles:
+            self.obstacles = build_obstacles_for_env(self._config.num_obstacles, obstacles_prim_path, obstacle_positions)
+            self.move_obstacles = move_obstacles
 
         self.reset()
 
@@ -66,7 +76,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             final_distance = np.linalg.norm(final_position - self._target_position)
             neg_distance_change = initial_distance - final_distance
 
-            return neg_distance_change * 100
+            return neg_distance_change * 10
 
     def _get_lidar_readings(self) -> np.ndarray:
         if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
@@ -91,10 +101,19 @@ class ObstacleAvoidIsaacLab(gym.Env):
         agent_y = self._agent_position[1]
 
         # If agent is in top half, target goes bottom
+        # if agent_y > 0:
+        #     self._target_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
+        # else:
+        #     self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
         if agent_y > 0:
-            self._target_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
+            self._target_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
         else:
-            self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
+            self._target_position = self._sample_position(self.arena_buffer_size, self.arena_size)
+
+        target: RigidObject = self.scene["target"]
+        target_pos = target.data.default_root_state.clone()
+        target_pos[:, :2] = torch.tensor(self._target_position)
+        target.write_root_pose_to_sim(target_pos[:, :7])
 
         # print(self._target_position)
 
@@ -113,16 +132,15 @@ class ObstacleAvoidIsaacLab(gym.Env):
         return np.any(self._get_lidar_readings() < self._config.reward_shaping_slack)
 
     def _update_time(self):
-        # TODO: Not sure if this is correct
         self._current_time += self.sim_dt
 
     def _sample_position(self, y_min: float, y_max: float, margin:float=1.0, x_min: float = None, x_max: float = None):
         """
-        Sample a (x,y) in [-10,10] x [-10,10] but restricted to a y-band.
-        margin avoids spawning at walls.
+        Sample a (x,y) in [-self.arena_size,self.arena_size] x [-self.arena_size,self.arena_size] 
+        but restricted to a y-band. margin avoids spawning at walls.
         """
-        x_min = x_min or -self.walls_half_length
-        x_max = x_max or self.walls_half_length
+        x_min = x_min or -self.arena_size
+        x_max = x_max or self.arena_size
         x = np.random.uniform(x_min + margin, x_max - margin)
         y = np.random.uniform(y_min + margin, y_max - margin)
         return np.array([x, y], dtype=np.float32)
@@ -139,8 +157,8 @@ class ObstacleAvoidIsaacLab(gym.Env):
         Resets the agent in either the top or bottom half of the map,
         and places the target in the opposite half.
         Coordinate system:
-            x ∈ [-10,10]
-            y ∈ [-10,10]   (origin at center)
+            x ∈ [-self.arena_size,self.arena_size]
+            y ∈ [-self.arena_size,self.arena_size]   (origin at center)
         """
         # print("Resetting Env")
         turtlebot: Articulation = self.scene["Turtlebot"]
@@ -148,12 +166,18 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # Randomly decide agent region (top or bottom)
         agent_on_top = np.random.rand() > 0.5
 
+        # if agent_on_top:
+        #     self._agent_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
+        #     self._target_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
+        # else:
+        #     self._agent_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
+        #     self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
         if agent_on_top:
-            self._agent_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
-            self._target_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
+            self._agent_position = self._sample_position(self.arena_buffer_size, self.arena_size)
+            self._target_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
         else:
-            self._agent_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
-            self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
+            self._agent_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
+            self._target_position = self._sample_position(self.arena_buffer_size, self.arena_size)
 
         # print(self._target_position)
         heading = np.random.random() * 2 * np.pi
@@ -178,6 +202,11 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
         self._agent_heading = turtlebot.data.heading_w.reshape(-1).cpu().numpy()
 
+        target: RigidObject = self.scene["target"]
+        target_pos = target.data.default_root_state.clone()
+        target_pos[:, :2] = torch.tensor(self._target_position)
+        target.write_root_pose_to_sim(target_pos[:, :7])
+
         # Reset timers
         self._current_time = 0.0
         self._lidar_readings = None
@@ -199,7 +228,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
                 self._reset_target_location()
 
-            turtlebot.set_joint_velocity_target(torch.tensor(action))
+            turtlebot.set_joint_velocity_target(torch.tensor(action / 0.033))
             self.scene.write_data_to_sim()
 
             #start_time = time.time()
@@ -208,6 +237,13 @@ class ObstacleAvoidIsaacLab(gym.Env):
                 self.sim_context.step(render)
                 self._update_time()
                 delta_time += self.sim_dt
+
+                if self._config.num_obstacles:
+                    self.move_obstacles(self.sim_dt, self.obstacles, self.arena_size, self._config.obstacle_size)
+
+                if self._did_agent_collide():
+                    break
+
             self.scene.update(delta_time)
             # print(f"Sim took: {time.time() - start_time:.4f}")
 
@@ -230,11 +266,11 @@ class ObstacleAvoidIsaacLab(gym.Env):
             observation = {
                 "agent_position": self._agent_position,
                 "agent_orientation": np.array([x_orientation, y_orientation]),
+                "agent_velocity": action / 0.033,
                 "target_position": self._get_noisy_target_position(),
                 "lidar_readings": lidar_readings
             }
 
-            # TODO: Check if IsaacLab collider returns true/false
             done = self._did_agent_collide() \
                 or int(self._current_time // 1) > self._config.episode_length
 

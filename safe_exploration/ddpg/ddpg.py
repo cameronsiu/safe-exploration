@@ -178,6 +178,12 @@ class DDPG:
 
         # Log to tensorboard
         start_time = time.time()
+        self._writer.add_scalar("max abs q target", torch.max(torch.abs(q_target)).item(), self._train_global_step)
+        self._writer.add_scalar("mean abs q target", torch.mean(torch.abs(q_target)).item(), self._train_global_step)
+        self._writer.add_scalar("var q target", torch.var(q_target).item(), self._train_global_step)
+        self._writer.add_scalar("mean q target", torch.mean(q_target).item(), self._train_global_step)
+        self._writer.add_scalar("max abs q predicted", torch.max(torch.abs(q_predicted)).item(), self._train_global_step)
+        self._writer.add_scalar("mean abs q predicted", torch.mean(torch.abs(q_predicted)).item(), self._train_global_step)
         self._writer.add_scalar("critic loss", critic_loss.item(), self._train_global_step)
         self._writer.add_scalar("actor loss", actor_loss.item(), self._train_global_step)
         (seq(self._models.items())

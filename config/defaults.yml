@@ -45,9 +45,21 @@ arguments:
           - name: "reward_shaping_slack"
             default: 0.1
           - name: "action_scale"
-            default: 6.0
+            default: 0.22
           - name: "num_lidar_buckets"
             default: 9
+          - name: "device"
+            default: "cpu"
+          - name: "headless"
+            default: false
+          - name: "num_envs"
+            default: 1
+          - name: "arena_size"
+            default: 6
+          - name: "num_obstacles"
+            default: 0
+          - name: "obstacle_size"
+            default: 0.5
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -69,7 +81,7 @@ arguments:
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 50
+          default: 100
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
@@ -150,7 +162,7 @@ arguments:
           - name: "constraint_model_files"
             default: "./output/constraint_*.pt"
           - name: "test"
-            default: false
+            default: true
           - name: "safety_layer_only"
             default: false
           - name: "train_safety_layer"
@@ -158,11 +170,5 @@ arguments:
           - name: "render_training"
             default: false
           - name: "render_evaluation"
-            default: false
-          - name: "device"
-            default: "cpu"
-          - name: "num_envs"
-            default: 1
-          - name: "headless"
             default: true
 
