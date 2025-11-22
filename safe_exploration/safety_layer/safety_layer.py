@@ -97,6 +97,15 @@ class SafetyLayer:
                 "c": c,
                 "c_next": c_next 
             })
+
+            if self._config.save_data:
+                self.save_data["action"].append(action)
+                self.save_data["observation"].append(self._flatten_dict({
+                    feature: observation[feature] for feature in self._features
+                }))
+                self.save_data["c"].append(c)
+                self.save_data["c_next"].append(c_next)
+                self.save_data["agent_position"].append(observation["agent_position"])
             
             observation = observation_next
             episode_length += 1
@@ -192,6 +201,15 @@ class SafetyLayer:
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
+        if self._config.save_data:
+            self.save_data = {
+                "action": [],
+                "observation": [],
+                "c": [],
+                "c_next": [],
+                "agent_position": [],
+            }
+
         for epoch in range(self._config.epochs):
             # Just sample episodes for the whole epoch
             self._sample_steps(self._config.steps_per_epoch)
@@ -228,4 +246,29 @@ class SafetyLayer:
 
         for i, model in enumerate(self._models):
             model.save(output_folder, i)
+
+        if self._config.save_data:
+            self.save_replay_buffer()
+
+    def save_replay_buffer(self, filename="data/replay_buffer.npz"):
+        actions = np.array(self.save_data["action"])
+        observations = np.array(self.save_data["observation"])
+        c = np.array(self.save_data["c"])
+        c_next = np.array(self.save_data["c_next"])
+        agent_position = np.array(self.save_data["agent_position"])
+
+        print(actions.shape)
+        print(observations.shape)
+        print(c.shape)
+        print(c_next.shape)
+        print(agent_position.shape)
+
+        np.savez_compressed(filename,
+                            actions=actions,
+                            observations=observations,
+                            c=c,
+                            c_next=c_next,
+                            agent_position=agent_position,
+        )
+        print(f"Data saved to {filename}")
 
