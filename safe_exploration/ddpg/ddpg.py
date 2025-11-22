@@ -118,7 +118,7 @@ class DDPG:
         self._target_compute_time += time.time() - start_time
 
 
-        return reward + self._config.discount_factor * (1 - done) * q
+        return (reward + self._config.discount_factor * (1 - done) * q).detach()
 
     def _flatten_dict(self, inp):
         if type(inp) == dict:
@@ -156,6 +156,7 @@ class DDPG:
         q_predicted = self._critic(obs, action)
         critic_loss = F.smooth_l1_loss(q_predicted, q_target)
         critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self._critic.parameters(), 1.0)
         self._critic_optimizer.step()
         self._critic_update_time += time.time() - start_time
 
@@ -168,6 +169,7 @@ class DDPG:
         actor_loss = -torch.mean(self._critic(self._as_tensor(batch["observation"]), new_action))
         actor_loss.backward()
         self._actor_optimizer.step()
+        torch.nn.utils.clip_grad_norm_(self._actor.parameters(), 1.0)
         self._actor_update_time += time.time() - start_time
 
         # Update targets networks
@@ -178,6 +180,14 @@ class DDPG:
 
         # Log to tensorboard
         start_time = time.time()
+        self._writer.add_scalar("max abs q target", torch.max(torch.abs(q_target)).item(), self._train_global_step)
+        self._writer.add_scalar("mean abs q target", torch.mean(torch.abs(q_target)).item(), self._train_global_step)
+        self._writer.add_scalar("var q target", torch.var(q_target).item(), self._train_global_step)
+        self._writer.add_scalar("mean q target", torch.mean(q_target).item(), self._train_global_step)
+        self._writer.add_scalar("max abs q predicted", torch.max(torch.abs(q_predicted)).item(), self._train_global_step)
+        self._writer.add_scalar("mean abs q predicted", torch.mean(torch.abs(q_predicted)).item(), self._train_global_step)
+        self._writer.add_scalar("var q predicted", torch.var(q_predicted).item(), self._train_global_step)
+        self._writer.add_scalar("mean q predicted", torch.mean(q_predicted).item(), self._train_global_step)
         self._writer.add_scalar("critic loss", critic_loss.item(), self._train_global_step)
         self._writer.add_scalar("actor loss", actor_loss.item(), self._train_global_step)
         (seq(self._models.items())
@@ -286,11 +296,14 @@ class DDPG:
 
             render = step > self._config.start_steps and self._render_training
 
-            if render:
-                self._env.render_env()
+            # if render:
+            #     self._env.render_env()
 
             observation_next, reward, done, _ = self._env.step(action, render)
             self._sample_counter.record()
+                
+            # if episode_length % 100 == 0:
+            #     print(f"Recent Frame Rate: {self._sample_counter.frequency()}")
 
             episode_reward += reward
             episode_length += 1
@@ -341,7 +354,7 @@ class DDPG:
                 eval_start = time.time()
                 epoch_number = int(step / self._config.steps_per_epoch)
                 print(f"Finished epoch {epoch_number}. Running validation ...")
-                self.evaluate(self._render_evaluation % 5 == 0)
+                self.evaluate(self._render_evaluation and epoch_number % 5 == 0)
                 eval_end = time.time()
                 time_eval += eval_end - eval_start
                 print(f"Recent Frame Rate: {self._sample_counter.frequency()}")

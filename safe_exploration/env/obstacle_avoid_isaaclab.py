@@ -39,7 +39,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             'agent_position': Box(low=-self.walls_half_length, high=self.walls_half_length, shape=(2,), dtype=np.float32),
             'agent_orientation': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
             'target_position': Box(low=-8, high=8, shape=(2,), dtype=np.float32),
-            'lidar_readings': Box(low=0.2, high=15, shape=(self._num_lidar_buckets,), dtype=np.float32)
+            #'lidar_readings': Box(low=0.2, high=15, shape=(self._num_lidar_buckets,), dtype=np.float32)
         })
 
         ## Isaac Sim
@@ -61,12 +61,11 @@ class ObstacleAvoidIsaacLab(gym.Env):
         if self._config.enable_reward_shaping and self._is_agent_outside_shaping_boundary():
             return -1
         else:
-            # Square each distance so being closer is more valuable
             initial_distance = np.linalg.norm(initial_position - self._target_position)
             final_distance = np.linalg.norm(final_position - self._target_position)
             neg_distance_change = initial_distance - final_distance
 
-            return neg_distance_change * 100
+            return neg_distance_change * 10
 
     def _get_lidar_readings(self) -> np.ndarray:
         if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
@@ -196,10 +195,10 @@ class ObstacleAvoidIsaacLab(gym.Env):
             turtlebot: Articulation = self.scene["Turtlebot"]
             initial_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
 
-            if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
-                self._reset_target_location()
+            # if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
+            #     self._reset_target_location()
 
-            turtlebot.set_joint_velocity_target(torch.tensor(action))
+            turtlebot.set_joint_velocity_target(torch.tensor(action * self._action_scale))
             self.scene.write_data_to_sim()
 
             #start_time = time.time()
@@ -231,12 +230,23 @@ class ObstacleAvoidIsaacLab(gym.Env):
                 "agent_position": self._agent_position,
                 "agent_orientation": np.array([x_orientation, y_orientation]),
                 "target_position": self._get_noisy_target_position(),
-                "lidar_readings": lidar_readings
+                #"lidar_readings": lidar_readings
             }
 
+            collided = self._did_agent_collide()
+            time_up = int(self._current_time // 1) > self._config.episode_length
+            reached = np.linalg.norm(self._agent_position - self._target_position) < 0.05
+
+            if not reached:
+                reward -= 1
+
             # TODO: Check if IsaacLab collider returns true/false
-            done = self._did_agent_collide() \
-                or int(self._current_time // 1) > self._config.episode_length
+            done = collided or time_up or reached
+            
+            # print(observation)
+            # print(f"Reward: {reward}")
+            # print(f"Distance: {np.linalg.norm(self._agent_position - self._target_position)}")
+            # print(done)
 
             return observation, reward, done, {}
         

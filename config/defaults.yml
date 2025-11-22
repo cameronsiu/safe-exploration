@@ -39,7 +39,7 @@ arguments:
           - name: "respawn_interval"
             default: 10
           - name: "target_noise_std"
-            default: 0.05
+            default: 0.01
           - name: "enable_reward_shaping"
             default: false
           - name: "reward_shaping_slack"
@@ -62,14 +62,14 @@ arguments:
       help: "Critic network parameters."
       properties:
         - name: "layers"
-          default: [32, 16, 16]
+          default: [32, 16]
         - name: "init_bound"
           default: 0.003
     - name: "trainer"
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 50
+          default: 500
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
@@ -85,9 +85,9 @@ arguments:
         - name: "polyak"
           default: 0.995
         - name: "actor_lr"
-          default: 0.001
+          default: 0.00001
         - name: "critic_lr"
-          default: 0.001
+          default: 0.0001
         - name: "start_steps"
           default: 1000
         - name: "action_noise_range"
@@ -97,7 +97,7 @@ arguments:
         - name: "reward_scale"
           default: 1
         - name: "max_updates_per_episode"
-          default: 20
+          default: 10
         - name: "min_buffer_fill"
           default: 2000
   - name: "safety_layer"
@@ -150,7 +150,7 @@ arguments:
           - name: "constraint_model_files"
             default: "./output/constraint_*.pt"
           - name: "test"
-            default: false
+            default: true
           - name: "safety_layer_only"
             default: false
           - name: "train_safety_layer"
@@ -158,11 +158,11 @@ arguments:
           - name: "render_training"
             default: false
           - name: "render_evaluation"
-            default: false
+            default: true
           - name: "device"
             default: "cpu"
           - name: "num_envs"
             default: 1
           - name: "headless"
-            default: true
+            default: false
 
