@@ -59,9 +59,11 @@ arguments:
           - name: "num_obstacles"
             default: 3
           - name: "obstacle_size"
-            default: 0.2
+            default: 0.5
           - name: "enable_cameras" # sensors don't get updated if this is off
             default: true
+          - name: "constraint_max_clip"
+            default: 1.0
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:

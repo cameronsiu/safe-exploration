@@ -23,7 +23,7 @@ class SafetyLayer:
         if self._num_constraints != len(constraint_model_files):
             constraint_model_files = [None]*self._num_constraints
 
-        self._features = ["lidar_readings", "agent_orientation"]
+        self._features = ["lidar_readings"]
 
         self._initialize_constraint_models(constraint_model_files)
 
@@ -88,12 +88,12 @@ class SafetyLayer:
         observation = self._env.reset()
         self.collisions = 0
 
-        # Forward speed bias
-        bias_speed = (np.random.random(1) * 0.2) + 0.8
-        # Random turning bias
-        turn_bias = (np.random.rand() * 0.24) - 0.12
-
         for step in range(num_steps):
+            # Forward speed bias
+            bias_speed = (np.random.random() * 0.2) + 0.8
+            # Random turning bias
+            turn_bias = (np.random.random() * 0.12) - 0.06
+
             base = 0.22 * bias_speed
             left_vel  = np.clip(base - turn_bias, -0.22, 0.22)
             right_vel = np.clip(base + turn_bias, -0.22, 0.22)
@@ -132,8 +132,6 @@ class SafetyLayer:
             if done or (episode_length == self._config.max_episode_length):
                 observation = self._env.reset()
                 episode_length = 0
-                bias_speed = (np.random.random(1) * 0.2) + 0.8
-                turn_bias = (np.random.rand() * 0.24) - 0.12
 
     def _evaluate_batch(self, batch):
         observation = self._as_tensor(batch["observation"])
