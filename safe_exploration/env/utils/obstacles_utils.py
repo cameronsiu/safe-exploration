@@ -4,8 +4,8 @@ import omni
 from pxr import UsdGeom, Gf
 from omni.physx.scripts import utils as physx_utils
 
-SPEED_MIN          = 0.2       # m/s
-SPEED_MAX          = 0.2       # m/s
+SPEED_MIN          = 0.0       # m/s
+SPEED_MAX          = 0.0       # m/s
 JITTER_STD         = 0.25      # rad/s-equivalent heading jitter
 BOUNCE_GAIN        = 1.0       # reflection gain
 SEED               = 42
@@ -13,8 +13,14 @@ SEED               = 42
 np.random.seed(SEED)
 
 ## Creating Obstacles
-def build_obstacles_for_env(num_obstacles: int, obstacles_prim_path: str, obstacle_positions: list):
+def build_obstacles_for_env(num_obstacles: int, obstacles_prim_path: str, arena_half: int, obstacle_size: int):
     obstacles_paths, velxy = [], []
+    
+    pos = [
+            [-0.5, 0.0, 0.15],
+            [0.0, 0.5, 0.15],
+            [0.5, 0.0, 0.15]
+        ]
     for k in range(num_obstacles):
         path = f"{obstacles_prim_path}/box_{k}"
         obstacles_paths.append(path)
@@ -25,7 +31,7 @@ def build_obstacles_for_env(num_obstacles: int, obstacles_prim_path: str, obstac
     obstacles = {
         "obstacles_paths": obstacles_paths,
         "velxy": np.array(velxy, dtype=np.float32),
-        "locpos": np.array(obstacle_positions, dtype=np.float32)
+        "locpos": np.array(pos, dtype=np.float32)
     }
 
     return obstacles

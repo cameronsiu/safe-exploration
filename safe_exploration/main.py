@@ -144,27 +144,28 @@ class Trainer:
         rigid_objects = {}
         obstacles = None
         arena_half = env_config.arena_size // 2
-        margin = env_config.obstacle_size * 0.5 + 0.2
-        obstacle_positions = []
+        pos = [
+            [-0.5, 0.0],
+            [0.0, 0.5],
+            [0.5, 0.0]
+        ]
         for i in range(env_config.num_obstacles):
-            x = np.random.uniform(-arena_half + margin, arena_half - margin)
-            y = np.random.uniform(-arena_half + margin, arena_half - margin)
-            z = env_config.obstacle_size / 2 + 0.05
+            #z = env_config.obstacle_size / 2 + 0.01
             prim_path = "{ENV_REGEX_NS}/Obstacles/box_" + str(i)
             rigid_objects[f"box_{i}"] = RigidObjectCfg(
+                # spawn outside the arena
                 init_state=RigidObjectCfg.InitialStateCfg(
-                    pos=(x, y, z)
+                    pos=(pos[i][0], pos[i][1], 0.15)
                 ),
                 spawn=sim_utils.CuboidCfg(
-                    size=(env_config.obstacle_size, env_config.obstacle_size, env_config.obstacle_size),
-                    rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-                    mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
+                    size=(env_config.obstacle_size, env_config.obstacle_size, 0.3),
+                    rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+                    mass_props=sim_utils.MassPropertiesCfg(),
                     collision_props=sim_utils.CollisionPropertiesCfg(),
                 ),
                 prim_path=prim_path,
             )
             filter_prim_paths_expr.append(prim_path)
-            obstacle_positions.append([x, y, z])
 
         if rigid_objects:
             obstacles = RigidObjectCollectionCfg(rigid_objects=rigid_objects)
@@ -222,8 +223,9 @@ class Trainer:
         scene = InteractiveScene(scene_cfg)
 
         sim_context.reset()
+        sim_context.step()
 
-        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene, obstacle_positions)
+        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene)
         return env
 
 

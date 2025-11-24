@@ -15,7 +15,7 @@ from safe_exploration.safety_layer.constraint_model import ConstraintModel
 from safe_exploration.utils.list import for_each
 
 class SafetyLayer:
-    def __init__(self, env, constraint_model_files:List[str], render = False):    
+    def __init__(self, env, constraint_model_files:List[str], render: bool=False):    
         self._env = env
         self._config = Config.get().safety_layer.trainer
 
@@ -38,6 +38,17 @@ class SafetyLayer:
             self._cuda()
 
         self._render = render
+
+        self.collisions = 0
+
+        if self._config.save_data:
+            self.save_data = {
+                "action": [],
+                "observation": [],
+                "c": [],
+                "c_next": [],
+                "agent_position": [],
+            }
 
     def _as_tensor(self, ndarray, requires_grad=False):
         tensor = torch.Tensor(ndarray)
@@ -77,11 +88,13 @@ class SafetyLayer:
 
         observation = self._env.reset()
 
-        bias_direction = np.random.random(2) * 0.1
+        self.collisions = 0
 
-        for step in range(num_steps):            
+        #bias_speed = (np.random.random(1) * 0.2) + 0.8
+
+        for step in range(num_steps):
             action = self._env.action_space.sample()
-            action = action + bias_direction
+            #action = np.array([0.22, 0.22]) * bias_speed
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action, self._render)
             c_next = self._env.get_constraint_values()
@@ -95,7 +108,7 @@ class SafetyLayer:
                     feature: observation[feature] for feature in self._features
                 }),
                 "c": c,
-                "c_next": c_next 
+                "c_next": c_next
             })
 
             if self._config.save_data:
@@ -109,11 +122,14 @@ class SafetyLayer:
             
             observation = observation_next
             episode_length += 1
+
+            if self._env._did_agent_collide():
+                self.collisions += 1
             
             if done or (episode_length == self._config.max_episode_length):
                 observation = self._env.reset()
                 episode_length = 0
-                bias_direction = np.random.random(2) * 0.1
+                #bias_speed = (np.random.random(1) * 0.2) + 0.8
 
     def _evaluate_batch(self, batch):
         observation = self._as_tensor(batch["observation"])
@@ -160,7 +176,8 @@ class SafetyLayer:
 
         self._train_mode()
 
-        print(f"Validation completed, average loss {losses}")
+        print(f"Validation completed, average loss {losses}\n"
+              f"Number of collisions: {self.collisions}")
 
     def get_safe_action(self, observation, action, c):    
         # Find the values of G
@@ -201,19 +218,10 @@ class SafetyLayer:
 
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
-        if self._config.save_data:
-            self.save_data = {
-                "action": [],
-                "observation": [],
-                "c": [],
-                "c_next": [],
-                "agent_position": [],
-            }
-
         for epoch in range(self._config.epochs):
             # Just sample episodes for the whole epoch
             self._sample_steps(self._config.steps_per_epoch)
-            
+
             # Do the update from memory
             losses = np.mean(np.concatenate([self._update_batch(batch) for batch in \
                     self._replay_buffer.get_sequential(self._config.batch_size)]).reshape(-1, self._num_constraints), axis=0)
@@ -231,13 +239,19 @@ class SafetyLayer:
                     .map(lambda x: (f"{x[0]}_{x[1][0]}", x[1][1])) # (modified_param_name, param_data)
                     .for_each(lambda x: self._writer.add_histogram(x[0], x[1].data.numpy(), self._train_global_step)))
 
-
-
             self._train_global_step += 1
 
-            print(f"Finished epoch {epoch} with losses: {losses}. Running validation ...")
+            print(f"Finished epoch {epoch} with losses: {losses}.\n"
+                  f"Number of collisions: {self.collisions}\n"
+                  f"Running validation ...")
             self.evaluate()
             print("----------------------------------------------------------")
+
+            for i, model in enumerate(self._models):
+                model.save(output_folder, i)
+
+            if self._config.save_data:
+                self.save_replay_buffer()
 
         self._writer.close()
         print("==========================================================")

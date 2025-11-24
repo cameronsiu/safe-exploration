@@ -31,11 +31,11 @@ arguments:
           - name: "target_margin"
             default: 0.2
           - name: "agent_slack"
-            default: 0.05
+            default: 0.15
           - name: "episode_length"
             default: 30
           - name: "action_ratio"
-            default: 6
+            default: 60
           - name: "respawn_interval"
             default: 10
           - name: "target_noise_std"
@@ -51,15 +51,15 @@ arguments:
           - name: "device"
             default: "cpu"
           - name: "headless"
-            default: false
+            default: true
           - name: "num_envs"
             default: 1
           - name: "arena_size"
-            default: 6
+            default: 2
           - name: "num_obstacles"
-            default: 0
+            default: 3
           - name: "obstacle_size"
-            default: 0.5
+            default: 0.1
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -130,17 +130,19 @@ arguments:
           - name: "lr"
             default: 0.001
           - name: "max_episode_length"
-            default: 600
+            default: 300
           - name: "steps_per_epoch"
             default: 6000
           - name: "epochs"
-            default: 10
+            default: 20
           - name: "evaluation_steps"
             default: 1500
           - name: "replay_buffer_size"
             default: 1000000
           - name: "use_gpu"
             default: false
+          - name: "save_data"
+            default: true
   - name: "main"
     help: "Safe-Explorer driver properties."
     properties:
@@ -152,7 +154,7 @@ arguments:
           - name: "task"
             default: "obstacleavoidisaaclab"
           - name: "use_safety_layer"
-            default: false
+            default: true
           - name: "output_folder"
             default: "./output"
           - name: "actor_model_file"
@@ -162,13 +164,19 @@ arguments:
           - name: "constraint_model_files"
             default: "./output/constraint_*.pt"
           - name: "test"
-            default: true
+            default: false
           - name: "safety_layer_only"
-            default: false
+            default: true
           - name: "train_safety_layer"
-            default: false
+            default: true
           - name: "render_training"
-            default: false
+            default: true
           - name: "render_evaluation"
             default: true
+
+            ### TODO: In safety layer training, 
+            # print min lidar data
+            # print constraint violations
+            # Figure out why at least one of the lidar values is showing zero
+              # Just the first time step (visualization problem)
 
