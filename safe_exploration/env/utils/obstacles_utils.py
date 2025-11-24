@@ -13,7 +13,7 @@ SEED               = 42
 np.random.seed(SEED)
 
 ## Creating Obstacles
-def build_obstacles_for_env(num_obstacles: int, obstacles_prim_path: str, arena_half: int, obstacle_size: int):
+def build_obstacles_for_env(num_obstacles: int, obstacles_prim_path: str):
     obstacles_paths, velxy = [], []
     
     pos = [

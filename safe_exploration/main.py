@@ -111,6 +111,7 @@ class Trainer:
             num_envs=env_config.num_envs,
             device=env_config.device,
             headless=env_config.headless,
+            enable_cameras=env_config.enable_cameras,
         )
 
         app_launcher = AppLauncher(args)
