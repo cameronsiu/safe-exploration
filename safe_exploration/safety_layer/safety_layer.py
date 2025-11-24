@@ -85,16 +85,19 @@ class SafetyLayer:
 
     def _sample_steps(self, num_steps):
         episode_length = 0
-
         observation = self._env.reset()
-
         self.collisions = 0
 
-        #bias_speed = (np.random.random(1) * 0.2) + 0.8
+        # Forward speed bias
+        bias_speed = (np.random.random(1) * 0.2) + 0.8
+        # Random turning bias
+        turn_bias = (np.random.rand() * 0.24) - 0.12
 
         for step in range(num_steps):
-            action = self._env.action_space.sample()
-            #action = np.array([0.22, 0.22]) * bias_speed
+            base = 0.22 * bias_speed
+            left_vel  = np.clip(base - turn_bias, -0.22, 0.22)
+            right_vel = np.clip(base + turn_bias, -0.22, 0.22)
+            action = np.array([left_vel, right_vel])
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action, self._render)
             c_next = self._env.get_constraint_values()
@@ -129,7 +132,8 @@ class SafetyLayer:
             if done or (episode_length == self._config.max_episode_length):
                 observation = self._env.reset()
                 episode_length = 0
-                #bias_speed = (np.random.random(1) * 0.2) + 0.8
+                bias_speed = (np.random.random(1) * 0.2) + 0.8
+                turn_bias = (np.random.rand() * 0.24) - 0.12
 
     def _evaluate_batch(self, batch):
         observation = self._as_tensor(batch["observation"])

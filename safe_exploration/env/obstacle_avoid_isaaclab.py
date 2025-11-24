@@ -19,12 +19,13 @@ from safe_exploration.core.config import Config
 
 class ObstacleAvoidIsaacLab(gym.Env):
 
-    def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene):
+    def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene, pos: list):
         self._config = Config.get().env.obstacleavoidisaaclab
         self._action_scale = self._config.action_scale
 
         # NOTE: use IsaacSim to change the number of lidars and change the parameter in yaml
         self._num_lidar_buckets = self._config.num_lidar_buckets
+        self._constraint_max_clip = self._config.constraint_max_clip
 
         # NOTE: turtlebot will apply velocity commands to wheel joints independently
         self.action_space = Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32)
@@ -62,7 +63,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # NOTE: Hardcoded for now
         obstacles_prim_path = f"/World/envs/env_0/Obstacles"
         if self._config.num_obstacles:
-            self.obstacles = build_obstacles_for_env(self._config.num_obstacles, obstacles_prim_path)
+            self.obstacles = build_obstacles_for_env(self._config.num_obstacles, obstacles_prim_path, pos)
             self.move_obstacles = move_obstacles
 
         self.reset()
@@ -149,7 +150,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         return 1
 
     def get_constraint_values(self):
-        clipped_readings = np.clip(self._get_lidar_readings(), 0, 0.2)
+        clipped_readings = np.clip(self._get_lidar_readings(), 0, self._constraint_max_clip)
         return np.array([self._config.agent_slack - np.min(clipped_readings)])
 
     def reset(self):
@@ -234,7 +235,10 @@ class ObstacleAvoidIsaacLab(gym.Env):
             #start_time = time.time()
             delta_time = 0
             for i in range(self.action_ratio):
-                self.sim_context.step(render)
+                if i == self.action_ratio - 1:
+                    self.sim_context.step(render)
+                else:
+                    self.sim_context.step(False)
                 self._update_time()
                 delta_time += self.sim_dt
 

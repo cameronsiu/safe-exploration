@@ -145,10 +145,11 @@ class Trainer:
         rigid_objects = {}
         obstacles = None
         arena_half = env_config.arena_size // 2
+        # TODO: remove this later
         pos = [
-            [-0.5, 0.0],
-            [0.0, 0.5],
-            [0.5, 0.0]
+            [-1.0, 0.0, 0.15],
+            [0.0, 1.0, 0.15],
+            [1.0, 0.0, 0.15]
         ]
         for i in range(env_config.num_obstacles):
             #z = env_config.obstacle_size / 2 + 0.01
@@ -156,10 +157,10 @@ class Trainer:
             rigid_objects[f"box_{i}"] = RigidObjectCfg(
                 # spawn outside the arena
                 init_state=RigidObjectCfg.InitialStateCfg(
-                    pos=(pos[i][0], pos[i][1], 0.15)
+                    pos=(pos[i][0], pos[i][1], pos[i][2])
                 ),
                 spawn=sim_utils.CuboidCfg(
-                    size=(env_config.obstacle_size, env_config.obstacle_size, 0.3),
+                    size=(env_config.obstacle_size, env_config.obstacle_size, pos[i][2]*2),
                     rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
                     mass_props=sim_utils.MassPropertiesCfg(),
                     collision_props=sim_utils.CollisionPropertiesCfg(),
@@ -226,7 +227,7 @@ class Trainer:
         sim_context.reset()
         sim_context.step()
 
-        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene)
+        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene, pos)
         return env
 
 
