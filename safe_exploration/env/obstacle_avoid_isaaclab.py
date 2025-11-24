@@ -19,26 +19,27 @@ from safe_exploration.core.config import Config
 
 class ObstacleAvoidIsaacLab(gym.Env):
 
-    def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene, obstacle_positions: list):
+    def __init__(self, sim_app: SimulationApp, sim_context: SimulationContext, scene: InteractiveScene, pos: list):
         self._config = Config.get().env.obstacleavoidisaaclab
         self._action_scale = self._config.action_scale
 
         # NOTE: use IsaacSim to change the number of lidars and change the parameter in yaml
         self._num_lidar_buckets = self._config.num_lidar_buckets
+        self._constraint_max_clip = self._config.constraint_max_clip
 
         # NOTE: turtlebot will apply velocity commands to wheel joints independently
         self.action_space = Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32)
 
-        self.arena_size = self._config.arena_size // 2
-        self.arena_buffer_size = self.arena_size*0.2
+        self.arena_half = self._config.arena_size // 2
+        self.arena_buffer_size = self.arena_half*0.2
 
         self.observation_space = Dict({
-            'agent_position': Box(low=-self.arena_size, high=self.arena_size, shape=(2,), dtype=np.float32),
+            'agent_position': Box(low=-self.arena_half, high=self.arena_half, shape=(2,), dtype=np.float32),
             'agent_orientation': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
             'agent_velocity': Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32),
             'target_position': Box(
-                low=-(self.arena_size - self.arena_buffer_size),
-                high=self.arena_size - self.arena_buffer_size,
+                low=-(self.arena_half - self.arena_buffer_size),
+                high=self.arena_half - self.arena_buffer_size,
                 shape=(2,), 
                 dtype=np.float32
             ),
@@ -62,7 +63,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # NOTE: Hardcoded for now
         obstacles_prim_path = f"/World/envs/env_0/Obstacles"
         if self._config.num_obstacles:
-            self.obstacles = build_obstacles_for_env(self._config.num_obstacles, obstacles_prim_path, obstacle_positions)
+            self.obstacles = build_obstacles_for_env(self._config.num_obstacles, obstacles_prim_path, pos)
             self.move_obstacles = move_obstacles
 
         self.reset()
@@ -106,9 +107,9 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # else:
         #     self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
         if agent_y > 0:
-            self._target_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
+            self._target_position = self._sample_position(-self.arena_half, -self.arena_buffer_size, margin=0.2)
         else:
-            self._target_position = self._sample_position(self.arena_buffer_size, self.arena_size)
+            self._target_position = self._sample_position(self.arena_buffer_size, self.arena_half, margin=0.2)
 
         target: RigidObject = self.scene["target"]
         target_pos = target.data.default_root_state.clone()
@@ -139,8 +140,8 @@ class ObstacleAvoidIsaacLab(gym.Env):
         Sample a (x,y) in [-self.arena_size,self.arena_size] x [-self.arena_size,self.arena_size] 
         but restricted to a y-band. margin avoids spawning at walls.
         """
-        x_min = x_min or -self.arena_size
-        x_max = x_max or self.arena_size
+        x_min = x_min or -self.arena_half
+        x_max = x_max or self.arena_half
         x = np.random.uniform(x_min + margin, x_max - margin)
         y = np.random.uniform(y_min + margin, y_max - margin)
         return np.array([x, y], dtype=np.float32)
@@ -149,7 +150,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         return 1
 
     def get_constraint_values(self):
-        clipped_readings = np.clip(self._get_lidar_readings(), 0, 0.2)
+        clipped_readings = np.clip(self._get_lidar_readings(), 0, self._constraint_max_clip)
         return np.array([self._config.agent_slack - np.min(clipped_readings)])
 
     def reset(self):
@@ -173,11 +174,11 @@ class ObstacleAvoidIsaacLab(gym.Env):
         #     self._agent_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
         #     self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
         if agent_on_top:
-            self._agent_position = self._sample_position(self.arena_buffer_size, self.arena_size)
-            self._target_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
+            self._agent_position = self._sample_position(-0.2, self.arena_half, margin=0.2)
+            self._target_position = self._sample_position(-self.arena_half, -self.arena_buffer_size)
         else:
-            self._agent_position = self._sample_position(-self.arena_size, -self.arena_buffer_size)
-            self._target_position = self._sample_position(self.arena_buffer_size, self.arena_size)
+            self._agent_position = self._sample_position(-self.arena_half, 0.2, margin=0.2)
+            self._target_position = self._sample_position(self.arena_buffer_size, self.arena_half)
 
         # print(self._target_position)
         heading = np.random.random() * 2 * np.pi
@@ -234,12 +235,15 @@ class ObstacleAvoidIsaacLab(gym.Env):
             #start_time = time.time()
             delta_time = 0
             for i in range(self.action_ratio):
-                self.sim_context.step(render)
+                if i == self.action_ratio - 1:
+                    self.sim_context.step(render)
+                else:
+                    self.sim_context.step(False)
                 self._update_time()
                 delta_time += self.sim_dt
 
                 if self._config.num_obstacles:
-                    self.move_obstacles(self.sim_dt, self.obstacles, self.arena_size, self._config.obstacle_size)
+                    self.move_obstacles(self.sim_dt, self.obstacles, self.arena_half, self._config.obstacle_size)
 
                 if self._did_agent_collide():
                     break

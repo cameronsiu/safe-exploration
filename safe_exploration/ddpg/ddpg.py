@@ -347,7 +347,7 @@ class DDPG:
                 eval_start = time.time()
                 epoch_number = int(step / self._config.steps_per_epoch)
                 print(f"Finished epoch {epoch_number}. Running validation ...")
-                self.evaluate(self._render_evaluation % 5 == 0)
+                self.evaluate(self._render_evaluation)
                 eval_end = time.time()
                 time_eval += eval_end - eval_start
                 print(f"Recent Frame Rate: {self._sample_counter.frequency()}")
