@@ -214,6 +214,11 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # Reset only environment physics (not entire sim)
         self.scene.reset()
 
+        # HACK: Recursively call reset again so that agent doesn't spawn in obstacle
+        self.sim_context.step()
+        if self._did_agent_collide():
+            return self.reset()
+
         # Return initial observation
         return self.step(np.zeros(2), False)[0]
     
