@@ -3,7 +3,7 @@ import numpy as np
 
 # Load replay buffer
 root_path = "data/safety_layer"
-data = np.load(f"{root_path}/replay_buffer.npz")
+data = np.load(f"{root_path}/../replay_buffer.npz")
 actions = np.array(data["actions"])  # shape: (N, 2)
 observations = np.array(data["observations"])  # shape: (N, Num lidars)
 c = np.array(data["c"])

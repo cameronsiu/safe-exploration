@@ -85,7 +85,7 @@ arguments:
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 100
+          default: 50
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
@@ -134,7 +134,7 @@ arguments:
           - name: "lr"
             default: 0.001
           - name: "max_episode_length"
-            default: 600
+            default: 300
           - name: "steps_per_epoch"
             default: 6000
           - name: "epochs"
@@ -170,7 +170,7 @@ arguments:
           - name: "test"
             default: false
           - name: "safety_layer_only"
-            default: true
+            default: false
           - name: "train_safety_layer"
             default: true
           - name: "render_training"

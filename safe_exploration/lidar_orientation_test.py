@@ -1,0 +1,215 @@
+from functional import seq
+from pathlib import Path
+import glob
+
+import numpy as np
+import torch
+
+from safe_exploration.core.config import Config
+from safe_exploration.env.obstacle_avoid import ObstacleAvoid
+from safe_exploration.env.obstacle_avoid_isaaclab import ObstacleAvoidIsaacLab
+from safe_exploration.ddpg.actor import Actor
+from safe_exploration.ddpg.critic import Critic
+from safe_exploration.ddpg.ddpg import DDPG
+from safe_exploration.safety_layer.safety_layer import SafetyLayer
+
+
+class Trainer:
+    def __init__(self):
+        self._config = Config.get().main.trainer
+        self._set_seeds()
+
+    def _set_seeds(self):
+        torch.manual_seed(self._config.seed)
+        np.random.seed(self._config.seed)
+
+    def _print_ascii_art(self):
+        print(
+        """
+          _________       _____        ___________              .__                              
+         /   _____/____ _/ ____\____   \_   _____/__  _________ |  |   ___________   ___________ 
+         \_____  \\__  \\   __\/ __ \   |    __)_\  \/  /\____ \|  |  /  _ \_  __ \_/ __ \_  __ \\
+         /        \/ __ \|  | \  ___/   |        \>    < |  |_> >  |_(  <_> )  | \/\  ___/|  | \/
+        /_______  (____  /__|  \___  > /_______  /__/\_ \|   __/|____/\____/|__|    \___  >__|   
+                \/     \/          \/          \/      \/|__|                           \/    
+        """)                                                                                                                  
+
+    def train(self):
+        self._print_ascii_art()
+        print("============================================================")
+        print("Initialized SafeExplorer with config:")
+        print("------------------------------------------------------------")
+        Config.get().pprint()
+        print("============================================================")
+
+        if self._config.task == "obstacleavoidisaaclab":
+            env = self.isaaclab_env()
+        else:
+            env = ObstacleAvoid()
+
+        save_data = {
+            "agent_orientation": [],
+            "lidar_readings": [],
+            "agent_position": [],
+        }
+
+        observation = env.reset()
+
+        heading_angle = 0.0
+
+        for i in range(1200):
+            action = np.array([np.cos(heading_angle), np.sin(heading_angle)]) * 0.5
+            save_data["agent_orientation"].append(observation["agent_orientation"])
+            save_data["lidar_readings"].append(observation["lidar_readings"])
+            save_data["agent_position"].append(observation["agent_position"])
+            observation, _, _, _ = env.step(action, True)
+            heading_angle += 2 * np.pi * 1/1200
+            print(f"Heading: {heading_angle}")
+
+
+        agent_orientation = np.array(save_data["agent_orientation"])
+        lidar_readings = np.array(save_data["lidar_readings"])
+        agent_position = np.array(save_data["agent_position"])
+
+        np.savez_compressed("./data/lidar_data.npz",
+            agent_orientation=agent_orientation,
+            lidar_readings=lidar_readings,
+            agent_position=agent_position,
+        )
+
+        if self._config.task == "obstacleavoidisaaclab":
+            env.sim_app.close()
+
+    def isaaclab_env(self):
+        env_config = Config.get().env.obstacleavoidisaaclab
+
+        import argparse
+        from isaaclab.app import AppLauncher
+        from isaacsim.simulation_app import SimulationApp
+
+        args = argparse.Namespace(
+            num_envs=env_config.num_envs,
+            device=env_config.device,
+            headless=env_config.headless,
+            enable_cameras=env_config.enable_cameras,
+        )
+
+        app_launcher = AppLauncher(args)
+        sim_app: SimulationApp = app_launcher.app
+
+        import isaacsim.core.utils.prims as prim_utils
+        import isaaclab.sim as sim_utils
+        from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
+        from isaaclab.actuators import ImplicitActuatorCfg
+        from isaaclab.assets import AssetBaseCfg, RigidObjectCollectionCfg, RigidObjectCfg
+        from isaaclab.assets.articulation import ArticulationCfg
+        from isaaclab.sensors import ContactSensorCfg
+        from isaaclab.sim.spawners.shapes import CylinderCfg
+
+        # HACK https://github.com/isaac-sim/IsaacLab/discussions/2256
+        # Setting enable_scene_query_support to true because lidar values were not being updated
+        # Also, add  "isaacsim.sensors.physx" = {}  inside of dependencies isaaclab.python.headless.kit 
+        sim_cfg = sim_utils.SimulationCfg(device=env_config.device, enable_scene_query_support=True)
+        sim_context = sim_utils.SimulationContext(sim_cfg)
+        sim_context.set_camera_view([3.5, 0.0, 3.2], [0.0, 0.0, 0.5])
+
+        TURTLEBOT_CONFIG = ArticulationCfg(
+            spawn=sim_utils.UsdFileCfg(usd_path=f"safe_exploration/env/turtlebot.usd", activate_contact_sensors=True),
+            actuators={"wheel_acts": ImplicitActuatorCfg(joint_names_expr=[".*"], damping=None, stiffness=None)},
+        )
+
+        for i in range(env_config.num_envs):
+            prim_utils.create_prim(f"/World/envs/env_{i}/Obstacles", "Xform")
+
+        filter_prim_paths_expr = ["{ENV_REGEX_NS}/Environment/Walls"]
+        rigid_objects = {}
+        obstacles = None
+        arena_half = env_config.arena_size // 2
+        # TODO: remove this later
+        pos = [
+            [-1.0, 0.0, 0.15],
+            [0.0, 1.0, 0.15],
+            [1.0, 0.0, 0.15]
+        ]
+        for i in range(0):
+            #z = env_config.obstacle_size / 2 + 0.01
+            prim_path = "{ENV_REGEX_NS}/Obstacles/box_" + str(i)
+            rigid_objects[f"box_{i}"] = RigidObjectCfg(
+                # spawn outside the arena
+                init_state=RigidObjectCfg.InitialStateCfg(
+                    pos=(pos[i][0], pos[i][1], pos[i][2])
+                ),
+                spawn=sim_utils.CuboidCfg(
+                    size=(env_config.obstacle_size, env_config.obstacle_size, pos[i][2]*2),
+                    rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+                    mass_props=sim_utils.MassPropertiesCfg(),
+                    collision_props=sim_utils.CollisionPropertiesCfg(),
+                ),
+                prim_path=prim_path,
+            )
+            filter_prim_paths_expr.append(prim_path)
+
+        if rigid_objects:
+            obstacles = RigidObjectCollectionCfg(rigid_objects=rigid_objects)
+
+        class ObstacleAvoidCfg(InteractiveSceneCfg):
+            """Obstacle Avoid Scene."""
+
+            scene: AssetBaseCfg = AssetBaseCfg(
+                prim_path="{ENV_REGEX_NS}/Environment",
+                init_state=AssetBaseCfg.InitialStateCfg(
+                    pos=(0.0, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0)
+                ),
+                spawn=sim_utils.UsdFileCfg(usd_path="safe_exploration/env/obstacle_avoid.usd"),
+            )
+
+            moving_obstacles = obstacles
+
+            Turtlebot: ArticulationCfg = TURTLEBOT_CONFIG.replace(prim_path="{ENV_REGEX_NS}/Turtlebot")
+
+            contact_forces_RW = ContactSensorCfg(
+                prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/wheel_right_link",
+                update_period=0.0,
+                history_length=6,
+                filter_prim_paths_expr=filter_prim_paths_expr
+            )
+
+            contact_forces_LW = ContactSensorCfg(
+                prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/wheel_left_link",
+                update_period=0.0,
+                history_length=6,
+                filter_prim_paths_expr=filter_prim_paths_expr
+            )
+
+            contact_forces_B = ContactSensorCfg(
+                prim_path="{ENV_REGEX_NS}/Turtlebot/turtlebot3_burger/base_footprint",
+                update_period=0.0,
+                history_length=6,
+                filter_prim_paths_expr=filter_prim_paths_expr
+            )
+
+            target = RigidObjectCfg(
+                prim_path="{ENV_REGEX_NS}/Target",
+                init_state=RigidObjectCfg.InitialStateCfg(
+                    pos=(0.0, 0.0, 0.0)
+                ),
+                spawn=CylinderCfg(
+                    radius=0.15,
+                    height=0.01,
+                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+                    rigid_props=sim_utils.RigidBodyPropertiesCfg(disable_gravity=True),
+                )
+            )
+
+        scene_cfg = ObstacleAvoidCfg(env_config.num_envs, env_spacing=20.0)
+        scene = InteractiveScene(scene_cfg)
+
+        sim_context.reset()
+        sim_context.step()
+
+        env = ObstacleAvoidIsaacLab(sim_app, sim_context, scene, pos)
+        return env
+
+
+if __name__ == '__main__':
+    Trainer().train()
