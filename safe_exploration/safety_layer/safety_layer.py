@@ -382,7 +382,7 @@ class SafetyLayer:
         if self._config.save_data:
             self.save_replay_buffer()
 
-    def save_replay_buffer(self, filename="data/replay_buffer.npz"):
+    def save_replay_buffer(self, filename="data/safety_layer/replay_buffer.npz"):
         actions = np.array(self.save_data["action"])
         observations = np.array(self.save_data["observation"])
         c = np.array(self.save_data["c"])

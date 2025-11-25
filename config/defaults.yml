@@ -45,7 +45,7 @@ arguments:
           - name: "reward_shaping_slack"
             default: 0.1
           - name: "action_scale"
-            default: 0.22
+            default: 1.0
           - name: "num_lidar_buckets"
             default: 9
           - name: "device"
@@ -118,6 +118,8 @@ arguments:
           default: 20
         - name: "min_buffer_fill"
           default: 2000
+        - name: "save_data"
+          default: true
   - name: "safety_layer"
     help: "Safety layer configuration."
     properties:
@@ -140,7 +142,7 @@ arguments:
           - name: "steps_per_epoch"
             default: 6000
           - name: "epochs"
-            default: 10
+            default: 50
           - name: "evaluation_steps"
             default: 1500
           - name: "replay_buffer_size"
@@ -172,9 +174,9 @@ arguments:
           - name: "test"
             default: false
           - name: "safety_layer_only"
-            default: true
+            default: false
           - name: "train_safety_layer"
-            default: true
+            default: false
           - name: "render_training"
             default: true
           - name: "render_evaluation"

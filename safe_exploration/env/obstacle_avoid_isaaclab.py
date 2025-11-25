@@ -36,7 +36,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self.observation_space = Dict({
             'agent_position': Box(low=-self.arena_half, high=self.arena_half, shape=(2,), dtype=np.float32),
             'agent_orientation': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
-            #'agent_velocity': Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32),
+            'agent_velocity': Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32),
             'target_position': Box(
                 low=-(self.arena_half - self.arena_buffer_size),
                 high=self.arena_half - self.arena_buffer_size,
@@ -88,7 +88,8 @@ class ObstacleAvoidIsaacLab(gym.Env):
             return self._lidar_readings
         else:
             raw_lidar_readings: np.ndarray = self.lidar_interface.get_linear_depth_data(self.lidar_prim_path).reshape(-1)
-            bucket_size = raw_lidar_readings.shape[0] // self._num_lidar_buckets
+            clipped_raw_lidar_readings = np.clip(raw_lidar_readings, 0.0, self._constraint_max_clip)
+            bucket_size = clipped_raw_lidar_readings.shape[0] // self._num_lidar_buckets
             bucketed_lidar_readings = raw_lidar_readings.reshape((self._num_lidar_buckets, bucket_size))
             self._lidar_readings = np.min(bucketed_lidar_readings, axis=1)
             self._lidar_measure_time = self._current_time
@@ -150,8 +151,8 @@ class ObstacleAvoidIsaacLab(gym.Env):
         return 1
 
     def get_constraint_values(self):
-        clipped_readings = np.clip(self._get_lidar_readings(), 0, self._constraint_max_clip)
-        return np.array([self._config.agent_slack - np.min(clipped_readings)]) * self._config.constraint_scale
+        lidar_readings = self._get_lidar_readings()
+        return np.array([self._config.agent_slack - np.min(lidar_readings)]) * self._config.constraint_scale
 
     def reset(self):
         """
@@ -278,7 +279,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             observation = {
                 "agent_position": self._agent_position,
                 "agent_orientation": np.array([x_orientation, y_orientation]),
-                #"agent_velocity": action / 0.033,
+                "agent_velocity": action / 0.033,
                 "target_position": self._get_noisy_target_position(),
                 "lidar_readings": lidar_readings
             }
