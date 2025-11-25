@@ -151,7 +151,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
     def get_constraint_values(self):
         clipped_readings = np.clip(self._get_lidar_readings(), 0, self._constraint_max_clip)
-        return np.array([self._config.agent_slack - np.min(clipped_readings)])
+        return np.array([self._config.agent_slack - np.min(clipped_readings)]) * self._config.constraint_scale
 
     def reset(self):
         """
@@ -218,8 +218,16 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
         # Return initial observation
         return self.step(np.zeros(2), False)[0]
+    
+    def normalized_to_wheel_speeds(self, cmd, vmax=0.22):
+        f, t = cmd
+        v_left  = vmax * (f - t)
+        v_right = vmax * (f + t)
+        return np.array([np.clip(v_left, -vmax, vmax),
+                np.clip(v_right, -vmax, vmax)])
 
     def step(self, action: np.ndarray, render: bool):
+        action = self.normalized_to_wheel_speeds(action)
 
         if self.sim_app.is_running():
 

@@ -83,21 +83,137 @@ class SafetyLayer:
 
         self._optimizers = [Adam(x.parameters(), lr=self._config.lr) for x in self._models]
 
+    """
+    Experimental:
+    def _sample_steps(self, num_steps):
+    episode_length = 0
+    observation = self._env.reset()
+    self.collisions = 0
+
+    # --- NEW: Define a behavior mode ---
+    behavior_step_remaining = 0
+    behavior_type = None
+    left_vel = right_vel = 0.0
+
+    def sample_new_behavior():
+        '''Return new behavior_type and number of steps it will last.'''
+        behavior = np.random.choice([
+            "forward",
+            "backward",
+            "turn_forward",
+            "turn_backward",
+            "spin",
+            "wiggle",
+            "pause"
+        ], p=[0.25, 0.1, 0.25, 0.1, 0.1, 0.15, 0.05])  # tune probabilities
+
+        duration = np.random.randint(20, 80)  # how long this behavior lasts
+        return behavior, duration
+
+    # sample first behavior
+    behavior_type, behavior_step_remaining = sample_new_behavior()
+
+    for step in range(num_steps):
+
+        # ---------- SWITCH BEHAVIOR WHEN DONE ----------
+        if behavior_step_remaining <= 0:
+            behavior_type, behavior_step_remaining = sample_new_behavior()
+
+        behavior_step_remaining -= 1
+
+        # ---------- BEHAVIOR GENERATION ----------
+        if behavior_type == "forward":
+            base = np.random.uniform(0.05, 0.22)
+            turn = np.random.uniform(-0.05, 0.05)
+            left_vel  = base - turn
+            right_vel = base + turn
+
+        elif behavior_type == "backward":
+            base = np.random.uniform(-0.22, -0.05)
+            turn = np.random.uniform(-0.05, 0.05)
+            left_vel  = base - turn
+            right_vel = base + turn
+
+        elif behavior_type == "turn_forward":
+            base = np.random.uniform(0.05, 0.22)
+            turn = np.random.uniform(0.05, 0.18) * np.random.choice([-1, 1])
+            left_vel  = np.clip(base - turn, -0.22, 0.22)
+            right_vel = np.clip(base + turn, -0.22, 0.22)
+
+        elif behavior_type == "turn_backward":
+            base = np.random.uniform(-0.22, -0.05)
+            turn = np.random.uniform(0.05, 0.18) * np.random.choice([-1, 1])
+            left_vel  = np.clip(base - turn, -0.22, 0.22)
+            right_vel = np.clip(base + turn, -0.22, 0.22)
+
+        elif behavior_type == "spin":
+            spin_dir = np.random.choice([-1, 1])
+            left_vel  = -spin_dir * np.random.uniform(0.12, 0.22)
+            right_vel =  spin_dir * np.random.uniform(0.12, 0.22)
+
+        elif behavior_type == "wiggle":
+            base = np.random.uniform(0.05, 0.15)
+            turn = np.sin(step * 0.3) * np.random.uniform(0.05, 0.15)
+            left_vel  = np.clip(base - turn, -0.22, 0.22)
+            right_vel = np.clip(base + turn, -0.22, 0.22)
+
+        elif behavior_type == "pause":
+            left_vel = right_vel = 0.0
+
+        action = np.array([left_vel, right_vel])
+
+        # ------------------------------------------------
+
+        c = self._env.get_constraint_values()
+        observation_next, _, done, _ = self._env.step(action, self._render)
+        c_next = self._env.get_constraint_values()
+
+        if self._render:
+            self._env.render_env()
+
+        self._replay_buffer.add({
+            "action": action,
+            "observation": self._flatten_dict({
+                feature: observation[feature] for feature in self._features
+            }),
+            "c": c,
+            "c_next": c_next
+        })
+
+        if self._config.save_data:
+            self.save_data["action"].append(action)
+            self.save_data["observation"].append(self._flatten_dict({
+                feature: observation[feature] for feature in self._features
+            }))
+            self.save_data["c"].append(c)
+            self.save_data["c_next"].append(c_next)
+            self.save_data["agent_position"].append(observation["agent_position"])
+
+        observation = observation_next
+        episode_length += 1
+
+        if self._env._did_agent_collide():
+            self.collisions += 1
+
+        if done or (episode_length == self._config.max_episode_length):
+            observation = self._env.reset()
+            episode_length = 0
+
+            # sample new behavior next episode
+            behavior_type, behavior_step_remaining = sample_new_behavior()
+    """
+
     def _sample_steps(self, num_steps):
         episode_length = 0
         observation = self._env.reset()
         self.collisions = 0
 
         for step in range(num_steps):
-            # Forward speed bias
-            bias_speed = (np.random.random() * 0.2) + 0.8
-            # Random turning bias
-            turn_bias = (np.random.random() * 0.12) - 0.06
-
-            base = 0.22 * bias_speed
-            left_vel  = np.clip(base - turn_bias, -0.22, 0.22)
-            right_vel = np.clip(base + turn_bias, -0.22, 0.22)
-            action = np.array([left_vel, right_vel])
+            if step % 10 == 0:
+                forward = np.random.uniform(-1, 1)
+                turn = np.random.uniform(-1, 1)
+            
+            action = np.array([forward, turn])
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action, self._render)
             c_next = self._env.get_constraint_values()

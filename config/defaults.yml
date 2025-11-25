@@ -64,6 +64,8 @@ arguments:
             default: true
           - name: "constraint_max_clip"
             default: 1.0
+          - name: "constraint_scale"
+            default: 10.0
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
