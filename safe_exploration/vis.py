@@ -1,8 +1,16 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+import argparse
+
+parser = argparse.ArgumentParser(
+    description="This script demonstrates adding a custom robot to an Isaac Lab environment."
+)
+parser.add_argument("--model", type=str, default="safety_layer", help="model replay buffer.")
+args = parser.parse_args()
+
 # Load replay buffer
-root_path = "data/ddpg"
+root_path = f"data/{args.model}"
 data = np.load(f"{root_path}/replay_buffer.npz")
 actions = np.array(data["actions"])  # shape: (N, 2)
 observations = np.array(data["observations"])  # shape: (N, Num lidars)

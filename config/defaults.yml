@@ -31,7 +31,7 @@ arguments:
           - name: "target_margin"
             default: 0.2
           - name: "agent_slack"
-            default: 0.25
+            default: 0.2
           - name: "episode_length"
             default: 30
           - name: "action_ratio"
@@ -63,7 +63,7 @@ arguments:
           - name: "enable_cameras" # sensors don't get updated if this is off
             default: true
           - name: "constraint_max_clip"
-            default: 1.0
+            default: 2.0
           - name: "constraint_scale"
             default: 10.0
   - name: "ddpg"
@@ -174,9 +174,9 @@ arguments:
           - name: "test"
             default: false
           - name: "safety_layer_only"
-            default: false
+            default: true
           - name: "train_safety_layer"
-            default: false
+            default: true
           - name: "render_training"
             default: true
           - name: "render_evaluation"

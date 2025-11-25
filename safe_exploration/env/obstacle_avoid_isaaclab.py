@@ -217,15 +217,27 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # Reset only environment physics (not entire sim)
         self.scene.reset()
 
+        # HACK: Recursively call reset again so that agent doesn't spawn in obstacle
+        self.sim_context.step()
+        if self._did_agent_collide():
+            return self.reset()
+
         # Return initial observation
         return self.step(np.zeros(2), False)[0]
     
-    def normalized_to_wheel_speeds(self, cmd, vmax=0.22):
+    def normalized_to_wheel_speeds(self, cmd: np.ndarray, vmax:float=0.22) -> np.ndarray:
+        TURN_GAIN = 0.4
         f, t = cmd
+        t = TURN_GAIN*(t**3)  # nonlinear smoothing
         v_left  = vmax * (f - t)
         v_right = vmax * (f + t)
-        return np.array([np.clip(v_left, -vmax, vmax),
-                np.clip(v_right, -vmax, vmax)])
+
+        v_left = np.clip(v_left, -0.22, 0.22)
+        v_right = np.clip(v_right, -0.22, 0.22)
+
+        normalized_speed = np.array([v_left, v_right])
+
+        return normalized_speed
 
     def step(self, action: np.ndarray, render: bool):
         action = self.normalized_to_wheel_speeds(action)
