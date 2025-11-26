@@ -28,7 +28,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self._constraint_max_clip = self._config.constraint_max_clip
 
         # NOTE: turtlebot will apply velocity commands to wheel joints independently
-        self.action_space = Box(low=-1, high=1, shape=(2,), dtype=np.float32)
+        self.action_space = Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32)
 
         self.arena_half = self._config.arena_size // 2
         self.arena_buffer_size = self.arena_half*0.2
@@ -273,6 +273,67 @@ class ObstacleAvoidIsaacLab(gym.Env):
             right_wheel_velocity = wheel_magnitude + rotation_fraction * 2.0
             left_wheel_velocity = wheel_magnitude - rotation_fraction * 2.0
             return torch.tensor([[left_wheel_velocity, right_wheel_velocity]])
+        
+    def normalize_angle(self, angle):
+        single_rotation = angle % (2 * np.pi)
+        
+        if single_rotation > np.pi:
+            normalized = single_rotation - 2 * np.pi
+        elif single_rotation < -np.pi:
+            normalized = single_rotation - -2 * np.pi
+        else:
+            normalized = single_rotation
+
+        return normalized
+        
+    def waypoint_to_wheel_vec(self, goal_pos, current_pos, current_heading_angle):
+        diff = goal_pos - current_pos
+
+        #print(f"goal_position: {goal_pos}")
+        #print(f"current_pos: {current_pos}")
+
+        diff_magnitude = np.linalg.norm(diff)
+
+        if diff_magnitude < 0.001:
+            return torch.tensor([[0.0, 0.0]])
+
+        diff_norm = self.normalize(diff)
+        command_angle = np.arctan2(diff_norm[1], diff_norm[0])
+        forward_angle_diff = self.normalize_angle(command_angle - current_heading_angle)
+        reverse_angle_diff = self.normalize_angle(command_angle - (current_heading_angle + np.pi))
+
+        if np.abs(forward_angle_diff) > np.abs(reverse_angle_diff):
+            angle_diff = reverse_angle_diff
+            velocity_mult = -1
+        else:
+            angle_diff = forward_angle_diff
+            velocity_mult = 1
+
+        #print(f"command_angle: {command_angle}")
+        #print(f"angle_diff: {angle_diff}")
+
+        rotation_threshold = 2.0 * np.pi / 16.0
+
+        wheel_speed = 6.0
+        if np.abs(angle_diff) > rotation_threshold:
+            # only rotate
+            right_wheel_sign = np.sign(angle_diff)
+            left_wheel_sign = -right_wheel_sign
+            right_wheel_velocity = right_wheel_sign * wheel_speed
+            left_wheel_velocity = left_wheel_sign * wheel_speed
+            return velocity_mult * torch.tensor([[left_wheel_velocity, right_wheel_velocity]])
+        else:
+            # rotate and drive
+            rotation_fraction = angle_diff / rotation_threshold
+            rotation_adjustment_wheel_velocity = 4.0
+            if rotation_fraction > 0:
+                right_wheel_velocity = wheel_speed
+                left_wheel_velocity = wheel_speed - rotation_fraction * rotation_adjustment_wheel_velocity
+            else:
+                right_wheel_velocity = wheel_speed + rotation_fraction * rotation_adjustment_wheel_velocity
+                left_wheel_velocity = wheel_speed
+
+            return velocity_mult * torch.tensor([[left_wheel_velocity, right_wheel_velocity]])
 
 
     def step(self, action: np.ndarray, render: bool):
@@ -281,45 +342,50 @@ class ObstacleAvoidIsaacLab(gym.Env):
             turtlebot: Articulation = self.scene["Turtlebot"]
             initial_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
 
-            if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
-                self._reset_target_location()
+            goal_position = action + self._agent_position
 
+            #print(f"action: {action}")
 
-            #start_time = time.time()
-            delta_time = 0
-            for i in range(self.action_ratio):
-                wheel_velocity = self.heading_to_wheel_vel(action, self._agent_heading)
-                wheel_velocity = np.clip(wheel_velocity, -6.7, 6.7)
+            done = False
+            reached_goal = False
+            action_steps = 0
+            while not done:
+                action_steps += 1
+
+                wheel_velocity = self.waypoint_to_wheel_vec(goal_position, self._agent_position, self._agent_heading)
                 turtlebot.set_joint_velocity_target(wheel_velocity)
                 self.scene.write_data_to_sim()
 
-                if i == self.action_ratio - 1:
+                if reached_goal:
                     self.sim_context.step(render)
                 else:
-                    self.sim_context.step(False)
+                    self.sim_context.step(render)
+
                 self._update_time()
-                delta_time += self.sim_dt
 
                 if self._config.num_obstacles:
                     self.move_obstacles(self.sim_dt, self.obstacles, self.arena_half, self._config.obstacle_size)
 
-                if self._did_agent_collide():
-                    break
-
                 self.scene.update(self.sim_dt)
-
                 self._agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
                 self._agent_heading = turtlebot.data.heading_w.reshape(-1)[0].cpu().numpy()
 
-            # print(f"Sim took: {time.time() - start_time:.4f}")
+                done = self._did_agent_collide() \
+                    or int(self._current_time // 1) > self._config.episode_length
+                
+                if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
+                    self._reset_target_location()
 
-            # print(f"Target Vector: {self._target_position}")
-            # print(f"Distance: {np.linalg.norm(self._agent_position - self._target_position)}")
+                if reached_goal:
+                    break
 
-            # print(f"Agent starts at {initial_position}, moved to {self._agent_position}")
+                if np.linalg.norm(goal_position - self._agent_position) < 0.005:
+                    reached_goal = True
+
+            #print(action_steps)
+            #print(np.linalg.norm(self._agent_position - initial_position))
 
             reward = self._get_reward(initial_position, self._agent_position)
-            # print(f"Reward: {reward}")
 
             lidar_readings: np.ndarray = self._get_lidar_readings()
 
@@ -334,10 +400,8 @@ class ObstacleAvoidIsaacLab(gym.Env):
                 "lidar_readings": lidar_readings
             }
 
-            done = self._did_agent_collide() \
-                or int(self._current_time // 1) > self._config.episode_length
 
-            return observation, reward, done, {}
+            return observation, reward, done, { "wheel_velocity": wheel_velocity }
         
     def render_env(self):
         """Isaac Sim is already rendered"""

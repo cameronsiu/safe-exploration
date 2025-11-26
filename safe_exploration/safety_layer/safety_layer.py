@@ -162,8 +162,6 @@ class SafetyLayer:
         return losses
 
     def _update_batch(self, batch):
-        batch = self._replay_buffer.sample(self._config.batch_size)
-
         # Update critic
         for_each(lambda x: x.zero_grad(), self._optimizers)
         losses = self._evaluate_batch(batch)

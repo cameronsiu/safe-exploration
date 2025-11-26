@@ -45,7 +45,7 @@ arguments:
           - name: "reward_shaping_slack"
             default: 0.1
           - name: "action_scale"
-            default: 1.0
+            default: 0.05
           - name: "num_lidar_buckets"
             default: 9
           - name: "device"
@@ -87,7 +87,7 @@ arguments:
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 100
+          default: 150
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
@@ -138,13 +138,13 @@ arguments:
           - name: "lr"
             default: 0.001
           - name: "max_episode_length"
-            default: 600
+            default: 100
           - name: "steps_per_epoch"
-            default: 6000
+            default: 2000
           - name: "epochs"
-            default: 50
+            default: 15
           - name: "evaluation_steps"
-            default: 1500
+            default: 300
           - name: "replay_buffer_size"
             default: 1000000
           - name: "use_gpu"
