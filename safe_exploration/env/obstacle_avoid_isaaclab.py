@@ -81,6 +81,18 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
             return neg_distance_change * 10
 
+    def _normalize_lidar_positions(self) -> np.ndarray:
+        turtlebot: Articulation = self.scene["Turtlebot"]
+        heading = turtlebot.data.heading_w.reshape(-1).cpu().numpy()[0]
+        heading = heading % (2*np.pi)
+        raw_lidar_readings: np.ndarray = self.lidar_interface.get_linear_depth_data(self.lidar_prim_path).reshape(-1)
+
+        # amount of rotations per lidar ray
+        angle_per_ray = 2 * np.pi / raw_lidar_readings.shape[0]
+        lidar_shift = int(round(heading / angle_per_ray))
+        raw_lidar_readings = np.roll(raw_lidar_readings, lidar_shift)
+        return raw_lidar_readings
+
     def _get_lidar_readings(self) -> np.ndarray:
         if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
             return self._lidar_readings
@@ -89,7 +101,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             self._lidar_measure_time = self._current_time
             return self._lidar_readings
         else:
-            raw_lidar_readings: np.ndarray = self.lidar_interface.get_linear_depth_data(self.lidar_prim_path).reshape(-1)
+            raw_lidar_readings = self._normalize_lidar_positions()
             clipped_raw_lidar_readings = np.clip(raw_lidar_readings, 0.0, self._constraint_max_clip)
             bucket_size = clipped_raw_lidar_readings.shape[0] // self._num_lidar_buckets
             bucketed_lidar_readings = clipped_raw_lidar_readings.reshape((self._num_lidar_buckets, bucket_size))

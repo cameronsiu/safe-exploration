@@ -361,7 +361,6 @@ class DDPG:
                 c = self._env.get_constraint_values()
                 episode_reward = 0
                 episode_length = 0
-                violations = 0
 
             # Check if the epoch is over
             if step != 0 and step % self._config.steps_per_epoch == 0: 
