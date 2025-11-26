@@ -28,7 +28,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self._constraint_max_clip = self._config.constraint_max_clip
 
         # NOTE: turtlebot will apply velocity commands to wheel joints independently
-        self.action_space = Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32)
+        self.action_space = Box(low=-1, high=1, shape=(2,), dtype=np.float32)
 
         self.arena_half = self._config.arena_size // 2
         self.arena_buffer_size = self.arena_half*0.2
@@ -36,7 +36,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self.observation_space = Dict({
             'agent_position': Box(low=-self.arena_half, high=self.arena_half, shape=(2,), dtype=np.float32),
             'agent_orientation': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
-            'agent_velocity': Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32),
+            #'agent_velocity': Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32),
             'target_position': Box(
                 low=-(self.arena_half - self.arena_buffer_size),
                 high=self.arena_half - self.arena_buffer_size,
@@ -65,6 +65,8 @@ class ObstacleAvoidIsaacLab(gym.Env):
         if self._config.num_obstacles:
             self.obstacles = build_obstacles_for_env(self._config.num_obstacles, obstacles_prim_path, pos)
             self.move_obstacles = move_obstacles
+
+        self.spawn_anywhere = False
 
         self.reset()
 
@@ -167,19 +169,15 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
         # Randomly decide agent region (top or bottom)
         agent_on_top = np.random.rand() > 0.5
-
-        # if agent_on_top:
-        #     self._agent_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
-        #     self._target_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
-        # else:
-        #     self._agent_position = self._sample_position(y_min=-1, y_max=0, x_min=-1, x_max=1, margin=0)
-        #     self._target_position = self._sample_position(y_min=0, y_max=1, x_min=-1, x_max=1, margin=0)
         if agent_on_top:
             self._agent_position = self._sample_position(-0.2, self.arena_half, margin=0.2)
             self._target_position = self._sample_position(-self.arena_half, -self.arena_buffer_size)
         else:
             self._agent_position = self._sample_position(-self.arena_half, 0.2, margin=0.2)
             self._target_position = self._sample_position(self.arena_buffer_size, self.arena_half)
+
+        if self.spawn_anywhere:
+            self._agent_position = self._sample_position(x_min = -self.arena_half, x_max=self.arena_half, y_min = -self.arena_half, y_max=self.arena_half, margin=0.10)
 
         # print(self._target_position)
         heading = np.random.random() * 2 * np.pi
@@ -225,23 +223,47 @@ class ObstacleAvoidIsaacLab(gym.Env):
         # Return initial observation
         return self.step(np.zeros(2), False)[0]
     
-    def normalized_to_wheel_speeds(self, cmd: np.ndarray, vmax:float=0.22) -> np.ndarray:
-        TURN_GAIN = 0.4
-        f, t = cmd
-        t = TURN_GAIN*(t**3)  # nonlinear smoothing
-        v_left  = vmax * (f - t)
-        v_right = vmax * (f + t)
+    def normalize(self, vec):
+        # Calculate the L2 norm
+        l2_norm = np.linalg.norm(vec)
 
-        v_left = np.clip(v_left, -0.22, 0.22)
-        v_right = np.clip(v_right, -0.22, 0.22)
+        # Normalize the vector
+        unit_vec = vec / l2_norm
 
-        normalized_speed = np.array([v_left, v_right])
+        return unit_vec
+    
+    def heading_to_wheel_vel(self, command_heading, current_heading_angle):
+        max_wheel_velocity = 4.0
+        command_magnitude = np.linalg.norm(command_heading)
+        command_magnitude = np.clip(command_magnitude, 0., 1.)
 
-        return normalized_speed
+        if command_magnitude < 0.01:
+            return torch.tensor([[0.0, 0.0]])
+
+        wheel_magnitude = max_wheel_velocity * command_magnitude
+        command_direction = self.normalize(command_heading)
+
+        command_angle = np.arctan2(command_direction[1], command_direction[0])
+        angle_diff = command_angle - current_heading_angle
+
+        rotation_threshold = 2.0 * np.pi / 16.0
+
+        if np.abs(angle_diff) > rotation_threshold:
+            # only rotate
+            right_wheel_sign = np.sign(angle_diff)
+            left_wheel_sign = -right_wheel_sign
+            right_wheel_velocity = right_wheel_sign * wheel_magnitude
+            left_wheel_velocity = left_wheel_sign * wheel_magnitude
+            return torch.tensor([[left_wheel_velocity, right_wheel_velocity]])
+        else:
+            # rotate and drive
+            rotation_fraction = angle_diff / rotation_threshold
+            right_wheel_velocity = wheel_magnitude + rotation_fraction * 2.0
+            left_wheel_velocity = wheel_magnitude - rotation_fraction * 2.0
+            return torch.tensor([[left_wheel_velocity, right_wheel_velocity]])
+
 
     def step(self, action: np.ndarray, render: bool):
-        action = self.normalized_to_wheel_speeds(action)
-
         if self.sim_app.is_running():
 
             turtlebot: Articulation = self.scene["Turtlebot"]
@@ -250,12 +272,15 @@ class ObstacleAvoidIsaacLab(gym.Env):
             if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
                 self._reset_target_location()
 
-            turtlebot.set_joint_velocity_target(torch.tensor(action / 0.033))
-            self.scene.write_data_to_sim()
 
             #start_time = time.time()
             delta_time = 0
             for i in range(self.action_ratio):
+                wheel_velocity = self.heading_to_wheel_vel(action, self._agent_heading)
+                wheel_velocity = np.clip(wheel_velocity, -6.7, 6.7)
+                turtlebot.set_joint_velocity_target(wheel_velocity)
+                self.scene.write_data_to_sim()
+
                 if i == self.action_ratio - 1:
                     self.sim_context.step(render)
                 else:
@@ -269,11 +294,12 @@ class ObstacleAvoidIsaacLab(gym.Env):
                 if self._did_agent_collide():
                     break
 
-            self.scene.update(delta_time)
-            # print(f"Sim took: {time.time() - start_time:.4f}")
+                self.scene.update(self.sim_dt)
 
-            self._agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
-            self._agent_heading = turtlebot.data.heading_w.reshape(-1)[0].cpu().numpy()
+                self._agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
+                self._agent_heading = turtlebot.data.heading_w.reshape(-1)[0].cpu().numpy()
+
+            # print(f"Sim took: {time.time() - start_time:.4f}")
 
             # print(f"Target Vector: {self._target_position}")
             # print(f"Distance: {np.linalg.norm(self._agent_position - self._target_position)}")
@@ -291,7 +317,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             observation = {
                 "agent_position": self._agent_position,
                 "agent_orientation": np.array([x_orientation, y_orientation]),
-                "agent_velocity": action / 0.033,
+                #"agent_velocity": action / 0.033,
                 "target_position": self._get_noisy_target_position(),
                 "lidar_readings": lidar_readings
             }

@@ -54,7 +54,7 @@ class Trainer:
             
             if self._config.train_safety_layer:
                 safety_layer.train(self._config.output_folder)
-            if self._config.test:
+            if self._config.test_safety_layer:
                 safety_layer.evaluate()
         else:
             safety_layer = None
