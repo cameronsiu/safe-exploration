@@ -202,19 +202,23 @@ class DDPG:
         episode_rewards = []
         episode_lengths = []
         episode_actions = []
+        episode_wheel_velocities = []
 
         observation = self._env.reset()
         c = self._env.get_constraint_values()
         episode_reward = 0
         episode_length = 0
         episode_action = 0
+        episode_wheel_velocity = 0
 
         self._eval_mode()
 
         for step in range(self._config.evaluation_steps):
             action = self._get_action(observation, c, is_training=False)
             episode_action += np.absolute(action)
-            observation, reward, done, _ = self._env.step(action, render)
+            observation, reward, done, details = self._env.step(action, render)
+            if "wheel_velocity" in details:
+                episode_wheel_velocity += np.absolute(details["wheel_velocity"])
             
             if render:
                 self._env.render_env()
@@ -227,6 +231,7 @@ class DDPG:
                 episode_rewards.append(episode_reward)
                 episode_lengths.append(episode_length)
                 episode_actions.append(episode_action / episode_length)
+                episode_wheel_velocities.append(episode_wheel_velocity / episode_length)
 
                 observation = self._env.reset()
                 c = self._env.get_constraint_values()
@@ -239,6 +244,8 @@ class DDPG:
 
         self._writer.add_scalar("eval mean episode reward", mean_episode_reward, self._eval_global_step)
         self._writer.add_scalar("eval mean episode length", mean_episode_length, self._eval_global_step)
+        self._writer.add_scalar("eval mean action magnitude", np.mean(episode_actions), self._eval_global_step)
+        self._writer.add_scalar("eval mean wheel velocity", np.mean(episode_wheel_velocities), self._eval_global_step)
         self._eval_global_step += 1
 
         self._train_mode()
