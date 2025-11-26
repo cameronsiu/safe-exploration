@@ -123,7 +123,7 @@ arguments:
         help: "Hyperparameters for constraint model (g)"
         properties:
           - name: "layers"
-            default: [32, 16]
+            default: [10, 10]
           - name: "init_bound"
             default: 0.003
       - name: "trainer"
@@ -136,11 +136,11 @@ arguments:
           - name: "max_episode_length"
             default: 100
           - name: "steps_per_epoch"
-            default: 6000
+            default: 2000
           - name: "epochs"
             default: 15
           - name: "evaluation_steps"
-            default: 1500
+            default: 300
           - name: "replay_buffer_size"
             default: 1000000
           - name: "use_gpu"

@@ -23,7 +23,7 @@ class SafetyLayer:
         if self._num_constraints != len(constraint_model_files):
             constraint_model_files = [None]*self._num_constraints
 
-        self._features = ["lidar_readings", "agent_orientation"]
+        self._features = ["lidar_readings"]
 
         self._initialize_constraint_models(constraint_model_files)
 
@@ -158,8 +158,6 @@ class SafetyLayer:
         return losses
 
     def _update_batch(self, batch):
-        batch = self._replay_buffer.sample(self._config.batch_size)
-
         # Update critic
         for_each(lambda x: x.zero_grad(), self._optimizers)
         losses = self._evaluate_batch(batch)
