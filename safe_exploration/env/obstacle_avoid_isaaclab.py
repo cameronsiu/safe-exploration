@@ -92,7 +92,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             raw_lidar_readings: np.ndarray = self.lidar_interface.get_linear_depth_data(self.lidar_prim_path).reshape(-1)
             clipped_raw_lidar_readings = np.clip(raw_lidar_readings, 0.0, self._constraint_max_clip)
             bucket_size = clipped_raw_lidar_readings.shape[0] // self._num_lidar_buckets
-            bucketed_lidar_readings = raw_lidar_readings.reshape((self._num_lidar_buckets, bucket_size))
+            bucketed_lidar_readings = clipped_raw_lidar_readings.reshape((self._num_lidar_buckets, bucket_size))
             self._lidar_readings = np.min(bucketed_lidar_readings, axis=1)
             self._lidar_measure_time = self._current_time
             return self._lidar_readings
