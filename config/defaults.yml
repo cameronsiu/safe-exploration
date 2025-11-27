@@ -47,7 +47,7 @@ arguments:
           - name: "action_scale"
             default: 0.22
           - name: "num_lidar_buckets"
-            default: 9
+            default: 18
           - name: "device"
             default: "cpu"
           - name: "headless"
@@ -140,11 +140,11 @@ arguments:
           - name: "max_episode_length"
             default: 300
           - name: "steps_per_epoch"
-            default: 18000
+            default: 6000
           - name: "epochs"
             default: 100
           - name: "evaluation_steps"
-            default: 1800
+            default: 600
           - name: "replay_buffer_size"
             default: 1000000
           - name: "use_gpu"
@@ -176,7 +176,7 @@ arguments:
           - name: "safety_layer_only"
             default: false 
           - name: "train_safety_layer"
-            default: false
+            default: true
           - name: "test_safety_layer"
             default: false
           - name: "render_training"
