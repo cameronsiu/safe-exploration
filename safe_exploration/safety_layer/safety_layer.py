@@ -23,7 +23,7 @@ class SafetyLayer:
         if self._num_constraints != len(constraint_model_files):
             constraint_model_files = [None]*self._num_constraints
 
-        self._features = ["lidar_readings"]
+        self._features = ["lidar_readings", "agent_velocity", "agent_position"]
 
         self._initialize_constraint_models(constraint_model_files)
 
@@ -101,8 +101,7 @@ class SafetyLayer:
             # left_vel  = np.clip(base - turn_bias, -0.22, 0.22)
             # right_vel = np.clip(base + turn_bias, -0.22, 0.22)
             # action = np.array([left_vel, right_vel])
-            if step % 25 == 0:
-                action = self._env.action_space.sample()
+            action = self._env.action_space.sample()
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action, self._render)
             c_next = self._env.get_constraint_values()

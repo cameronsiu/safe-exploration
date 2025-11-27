@@ -36,7 +36,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
         self.observation_space = Dict({
             'agent_position': Box(low=-self.arena_half, high=self.arena_half, shape=(2,), dtype=np.float32),
             'agent_orientation': Box(low=-1, high=1, shape=(2,), dtype=np.float32),
-            #'agent_velocity': Box(low=-self._action_scale, high=self._action_scale, shape=(2,), dtype=np.float32),
+            'agent_velocity': Box(low=-0.22, high=0.22, shape=(2,), dtype=np.float32),
             'target_position': Box(
                 low=-(self.arena_half - self.arena_buffer_size),
                 high=self.arena_half - self.arena_buffer_size,
@@ -392,10 +392,12 @@ class ObstacleAvoidIsaacLab(gym.Env):
             x_orientation = np.cos(self._agent_heading)
             y_orientation = np.sin(self._agent_heading)
 
+            self._agent_velocity = turtlebot.data.root_lin_vel_w.reshape(-1)[:2].cpu().numpy()
+
             observation = {
                 "agent_position": self._agent_position,
                 "agent_orientation": np.array([x_orientation, y_orientation]),
-                #"agent_velocity": action / 0.033,
+                "agent_velocity": self._agent_velocity,
                 "target_position": self._get_noisy_target_position(),
                 "lidar_readings": lidar_readings
             }
