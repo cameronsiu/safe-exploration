@@ -92,15 +92,6 @@ class SafetyLayer:
         self.constraint_violations = 0
 
         for step in range(num_steps):
-            # Forward speed bias
-            # bias_speed = (np.random.random() * 0.2) + 0.8
-            # Random turning bias
-            # turn_bias = (np.random.random() * 0.12) - 0.06
-
-            # base = 0.22 * bias_speed
-            # left_vel  = np.clip(base - turn_bias, -0.22, 0.22)
-            # right_vel = np.clip(base + turn_bias, -0.22, 0.22)
-            # action = np.array([left_vel, right_vel])
             action = self._env.action_space.sample()
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action, self._render)
@@ -189,7 +180,8 @@ class SafetyLayer:
         self._train_mode()
 
         print(f"Validation completed, average loss {losses}\n"
-              f"Number of collisions: {self.collisions}")
+              f"Number of collisions: {self.collisions}\n"
+              f"Number of constraint violations: {self.constraint_violations}\n")
 
     def get_safe_action_with_details(self, observation, action, c):    
         # Find the values of G

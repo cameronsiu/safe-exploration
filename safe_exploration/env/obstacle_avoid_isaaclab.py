@@ -94,9 +94,10 @@ class ObstacleAvoidIsaacLab(gym.Env):
         return raw_lidar_readings
 
     def _get_lidar_readings(self) -> np.ndarray:
-        if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
-            return self._lidar_readings
-        elif self._did_agent_collide():
+        # if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
+        #     print(f"Getting same lidar readings!")
+        #     return self._lidar_readings
+        if self._did_agent_collide():
             self._lidar_readings = np.zeros((self._num_lidar_buckets,))
             self._lidar_measure_time = self._current_time
             return self._lidar_readings
@@ -340,48 +341,28 @@ class ObstacleAvoidIsaacLab(gym.Env):
             turtlebot: Articulation = self.scene["Turtlebot"]
             initial_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
 
-            goal_position = action + self._agent_position
+            if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
+                self._reset_target_location()
 
-            #print(f"action: {action}")
+            turtlebot.set_joint_velocity_target(torch.tensor(action / 0.033))
+            self.scene.write_data_to_sim()
 
-            done = False
-            reached_goal = False
-            action_steps = 0
-            while not done:
-                action_steps += 1
-
-                wheel_velocity = self.waypoint_to_wheel_vec(goal_position, self._agent_position, self._agent_heading)
-                turtlebot.set_joint_velocity_target(wheel_velocity)
-                self.scene.write_data_to_sim()
-
-                if reached_goal:
+            for i in range(self.action_ratio):
+                if i == self.action_ratio - 1:
                     self.sim_context.step(render)
                 else:
-                    self.sim_context.step(render)
-
+                    self.sim_context.step(False)
                 self._update_time()
+                self.scene.update(self.sim_dt)
 
                 if self._config.num_obstacles:
                     self.move_obstacles(self.sim_dt, self.obstacles, self.arena_half, self._config.obstacle_size)
 
-                self.scene.update(self.sim_dt)
-                self._agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
-                self._agent_heading = turtlebot.data.heading_w.reshape(-1)[0].cpu().numpy()
-
-                done = self._did_agent_collide() \
-                    or int(self._current_time // 1) > self._config.episode_length
-                
-                if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
-                    self._reset_target_location()
-
-                if reached_goal:
+                if self._did_agent_collide():
                     break
 
-                if np.linalg.norm(goal_position - self._agent_position) < 0.005:
-                    reached_goal = True
-
-            #print(action_steps)
-            #print(np.linalg.norm(self._agent_position - initial_position))
+            self._agent_position = turtlebot.data.root_pos_w.reshape(-1)[:2].cpu().numpy()
+            self._agent_heading = turtlebot.data.heading_w.reshape(-1)[0].cpu().numpy()
 
             reward = self._get_reward(initial_position, self._agent_position)
 
@@ -400,8 +381,10 @@ class ObstacleAvoidIsaacLab(gym.Env):
                 "lidar_readings": lidar_readings
             }
 
+            done = self._did_agent_collide() \
+                or int(self._current_time // 1) > self._config.episode_length
 
-            return observation, reward, done, { "wheel_velocity": wheel_velocity }
+            return observation, reward, done, {}
         
     def render_env(self):
         """Isaac Sim is already rendered"""
