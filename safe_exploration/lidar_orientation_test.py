@@ -47,55 +47,35 @@ class Trainer:
         else:
             env = ObstacleAvoid()
 
-        constraint_model_files = glob.glob(self._config.constraint_model_files)
-        print(f"Loading constraint model files: {constraint_model_files}")
+        save_data = {
+            "agent_orientation": [],
+            "lidar_readings": [],
+            "agent_position": [],
+        }
 
-        if self._config.use_safety_layer:
-            safety_layer = SafetyLayer(env, constraint_model_files, render=self._config.render_training)
-            
-            if self._config.train_safety_layer:
-                safety_layer.train(self._config.output_folder)
-            if self._config.test:
-                safety_layer.evaluate()
-        else:
-            safety_layer = None
+        observation = env.reset()
 
-        if self._config.safety_layer_only:
-            return
+        heading_angle = 0.0
 
-        actor_file = Path(self._config.actor_model_file)
-        critic_file = Path(self._config.critic_model_file)
+        for i in range(1200):
+            action = np.array([np.cos(heading_angle), np.sin(heading_angle)]) * 0.5
+            save_data["agent_orientation"].append(observation["agent_orientation"])
+            save_data["lidar_readings"].append(observation["lidar_readings"])
+            save_data["agent_position"].append(observation["agent_position"])
+            observation, _, _, _ = env.step(action, True)
+            heading_angle += 2 * np.pi * 1/1200
+            print(f"Heading: {heading_angle}")
 
-        actor_model_file = None
-        if actor_file.exists():
-            print(f"Loading actor file {self._config.actor_model_file}")
-            actor_model_file = self._config.actor_model_file
-        else:
-            print(f"Actor model file does not exist {self._config.actor_model_file}")
 
-        critic_model_file = None
-        if critic_file.exists():
-            print(f"Loading critic file {self._config.critic_model_file}")
-            critic_model_file = self._config.critic_model_file
-        else:
-            print(f"Critic model file does not exist {self._config.critic_model_file}")
+        agent_orientation = np.array(save_data["agent_orientation"])
+        lidar_readings = np.array(save_data["lidar_readings"])
+        agent_position = np.array(save_data["agent_position"])
 
-        observation_dim = (seq(env.observation_space.spaces.values())
-                            .map(lambda x: x.shape[0])
-                            .sum())
-
-        action_scale = env._action_scale
-
-        actor = Actor(observation_dim, env.action_space.shape[0], action_scale, actor_model_file)
-        critic = Critic(observation_dim, env.action_space.shape[0], critic_model_file)
-
-        safe_action_func = safety_layer.get_safe_action if safety_layer else None
-        ddpg = DDPG(env, actor, critic, safe_action_func, render_training=self._config.render_training, render_evaluation=self._config.render_evaluation)
-
-        if not self._config.test:
-            ddpg.train(self._config.output_folder)
-        else:
-            ddpg.evaluate(self._config.render_evaluation)
+        np.savez_compressed("./data/lidar_data.npz",
+            agent_orientation=agent_orientation,
+            lidar_readings=lidar_readings,
+            agent_position=agent_position,
+        )
 
         if self._config.task == "obstacleavoidisaaclab":
             env.sim_app.close()
@@ -151,7 +131,7 @@ class Trainer:
             [0.0, 1.0, 0.15],
             [1.0, 0.0, 0.15]
         ]
-        for i in range(env_config.num_obstacles):
+        for i in range(0):
             #z = env_config.obstacle_size / 2 + 0.01
             prim_path = "{ENV_REGEX_NS}/Obstacles/box_" + str(i)
             rigid_objects[f"box_{i}"] = RigidObjectCfg(
