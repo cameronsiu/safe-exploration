@@ -102,10 +102,14 @@ class ObstacleAvoidIsaacLab(gym.Env):
             return self._lidar_readings
         else:
             raw_lidar_readings = self._normalize_lidar_positions()
+
             clipped_raw_lidar_readings = np.clip(raw_lidar_readings, 0.0, self._constraint_max_clip)
+
             bucket_size = clipped_raw_lidar_readings.shape[0] // self._num_lidar_buckets
             bucketed_lidar_readings = clipped_raw_lidar_readings.reshape((self._num_lidar_buckets, bucket_size))
+
             self._lidar_readings = np.min(bucketed_lidar_readings, axis=1)
+
             self._lidar_measure_time = self._current_time
             return self._lidar_readings
 
@@ -166,7 +170,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
     def get_constraint_values(self):
         clipped_readings = np.clip(self._get_lidar_readings(), 0, self._constraint_max_clip)
-        return np.array([self._config.agent_slack - np.min(clipped_readings)])
+        return 10 * np.array([self._config.agent_slack - np.min(clipped_readings)])
 
     def reset(self):
         """
@@ -309,9 +313,6 @@ class ObstacleAvoidIsaacLab(gym.Env):
             angle_diff = forward_angle_diff
             velocity_mult = 1
 
-        #print(f"command_angle: {command_angle}")
-        #print(f"angle_diff: {angle_diff}")
-
         rotation_threshold = 2.0 * np.pi / 16.0
 
         wheel_speed = 6.0
@@ -321,17 +322,14 @@ class ObstacleAvoidIsaacLab(gym.Env):
             left_wheel_sign = -right_wheel_sign
             right_wheel_velocity = right_wheel_sign * wheel_speed
             left_wheel_velocity = left_wheel_sign * wheel_speed
-            return velocity_mult * torch.tensor([[left_wheel_velocity, right_wheel_velocity]])
+            return torch.tensor([[left_wheel_velocity, right_wheel_velocity]])
         else:
             # rotate and drive
             rotation_fraction = angle_diff / rotation_threshold
             rotation_adjustment_wheel_velocity = 4.0
-            if rotation_fraction > 0:
-                right_wheel_velocity = wheel_speed
-                left_wheel_velocity = wheel_speed - rotation_fraction * rotation_adjustment_wheel_velocity
-            else:
-                right_wheel_velocity = wheel_speed + rotation_fraction * rotation_adjustment_wheel_velocity
-                left_wheel_velocity = wheel_speed
+            adjustment = velocity_mult * rotation_fraction * rotation_adjustment_wheel_velocity
+            right_wheel_velocity = np.clip(wheel_speed + adjustment, -wheel_speed, wheel_speed)
+            left_wheel_velocity = np.clip(wheel_speed - adjustment, -wheel_speed, wheel_speed)
 
             return velocity_mult * torch.tensor([[left_wheel_velocity, right_wheel_velocity]])
 
