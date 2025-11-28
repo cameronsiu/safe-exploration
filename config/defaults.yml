@@ -47,7 +47,7 @@ arguments:
           - name: "action_scale"
             default: 0.22
           - name: "num_lidar_buckets"
-            default: 18
+            default: 60
           - name: "device"
             default: "cpu"
           - name: "headless"
@@ -60,12 +60,12 @@ arguments:
             default: 3
           - name: "obstacle_size"
             default: 0.5
-          - name: "enable_cameras" # sensors don't get updated if this is off
+          - name: "enable_cameras" # sensors don't get updated in headless mode if this is off
             default: true
           - name: "constraint_max_clip"
             default: 2.0
           - name: "constraint_scale"
-            default: 10.0
+            default: 5.0
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -73,14 +73,14 @@ arguments:
       help: "Actor network parameters."
       properties:
         - name: "layers"
-          default: [32, 16, 16]
+          default: [64, 32, 32, 16, 16, 8]
         - name: "init_bound"
           default: 0.003
     - name: "critic"
       help: "Critic network parameters."
       properties:
         - name: "layers"
-          default: [32, 16, 16]
+          default: [64, 32, 32, 16, 16, 8]
         - name: "init_bound"
           default: 0.003
     - name: "trainer"
@@ -127,7 +127,7 @@ arguments:
         help: "Hyperparameters for constraint model (g)"
         properties:
           - name: "layers"
-            default: [10, 10]
+            default: [64, 32, 32, 16, 16, 8]
           - name: "init_bound"
             default: 0.003
       - name: "trainer"
@@ -136,15 +136,15 @@ arguments:
           - name: "batch_size"
             default: 256
           - name: "lr"
-            default: 0.001
+            default: 0.0001
           - name: "max_episode_length"
             default: 300
           - name: "steps_per_epoch"
-            default: 6000
+            default: 12000
           - name: "epochs"
             default: 100
           - name: "evaluation_steps"
-            default: 600
+            default: 1200
           - name: "replay_buffer_size"
             default: 1000000
           - name: "use_gpu"
