@@ -1,5 +1,5 @@
 from functional import seq
-from torch.nn import Linear, Module, ModuleList
+from torch.nn import Linear, Module, ModuleList, LayerNorm 
 from torch.nn.init import uniform_
 import torch.nn.functional as F
 
@@ -24,6 +24,7 @@ class Net(Module):
                                     .zip(_layer_dims[1:])
                                     .map(lambda x: Linear(x[0], x[1]))
                                     .to_list())
+        self.norm = LayerNorm(layer_dims[0])
 
         self._init_weights(init_bound)
     
@@ -38,8 +39,11 @@ class Net(Module):
     def forward(self, inp):
         out = inp
 
-        for layer in self._layers[:-1]:
-            out = F.relu(layer(out))
+        for i, layer in enumerate(self._layers[:-1]):
+            if i == 0:
+                out = F.relu(self.norm(layer(out)))
+            else:
+                out = F.relu(layer(out))
 
         if self._last_activation:
             out = self._last_activation(self._layers[-1](out))
