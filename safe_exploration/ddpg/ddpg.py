@@ -61,6 +61,17 @@ class DDPG:
 
         self._sample_counter = FrequencyCounter()
 
+        if self._config.save_data:
+            self.save_data = {
+                "action": [],
+                "observation": [],
+                "c": [],
+                "c_next": [],
+                "agent_position": [],
+                "collisions": 0,
+                "violations": 0,
+            }
+
     def _as_tensor(self, ndarray, requires_grad=False):
         tensor = torch.Tensor(ndarray)
         tensor.requires_grad = requires_grad
@@ -186,10 +197,11 @@ class DDPG:
         self._writer.add_scalar("mean abs q predicted", torch.mean(torch.abs(q_predicted)).item(), self._train_global_step)
         self._writer.add_scalar("critic loss", critic_loss.item(), self._train_global_step)
         self._writer.add_scalar("actor loss", actor_loss.item(), self._train_global_step)
-        (seq(self._models.items())
-                    .flat_map(lambda x: [(x[0], y) for y in x[1].named_parameters()]) # (model_name, (param_name, param_data))
-                    .map(lambda x: (f"{x[0]}_{x[1][0]}", x[1][1]))
-                    .for_each(lambda x: self._writer.add_histogram(x[0], x[1].data.numpy(), self._train_global_step)))
+        if self._config.use_histogram:
+            (seq(self._models.items())
+                        .flat_map(lambda x: [(x[0], y) for y in x[1].named_parameters()]) # (model_name, (param_name, param_data))
+                        .map(lambda x: (f"{x[0]}_{x[1][0]}", x[1][1]))
+                        .for_each(lambda x: self._writer.add_histogram(x[0], x[1].data.numpy(), self._train_global_step)))
         self._train_global_step += 1
         self._logging_time += time.time() - start_time
 
@@ -319,6 +331,16 @@ class DDPG:
             if self._env._did_agent_collide():
                 collisions += 1
 
+            if self._config.save_data:
+                self.save_data["action"].append(action)
+                self.save_data["observation"].append(self._flatten_dict(observation))
+                self.save_data["c"].append(c)
+                c_next = self._env.get_constraint_values()
+                self.save_data["c_next"].append(c_next)
+                self.save_data["agent_position"].append(observation["agent_position"])
+                self.save_data["collisions"] = collisions
+                self.save_data["violations"] = violations
+
             observation = observation_next
             c = self._env.get_constraint_values()
             sim_end = time.time()
@@ -347,7 +369,6 @@ class DDPG:
                 c = self._env.get_constraint_values()
                 episode_reward = 0
                 episode_length = 0
-                violations = 0
 
             # Check if the epoch is over
             if step != 0 and step % self._config.steps_per_epoch == 0: 
@@ -371,9 +392,12 @@ class DDPG:
 
                 self._actor.save(output_folder)
                 self._critic.save(output_folder)
-            
+
+                if self._config.save_data:
+                    self.save_replay_buffer()
+
             previous_done = done
-        
+
         self._writer.close()
         print("==========================================================")
         print(f"Finished DDPG training. Time spent: {(time.time() - start_time) // 1} secs")
@@ -384,4 +408,26 @@ class DDPG:
 
         self._actor.save(output_folder)
         self._critic.save(output_folder)
+
+    def save_replay_buffer(self, filename="data/ddpg/replay_buffer.npz"):
+        actions = np.array(self.save_data["action"])
+        observations = np.array(self.save_data["observation"])
+        c = np.array(self.save_data["c"])
+        c_next = np.array(self.save_data["c_next"])
+        agent_position = np.array(self.save_data["agent_position"])
+
+        print(actions.shape)
+        print(observations.shape)
+        print(c.shape)
+        print(c_next.shape)
+        print(agent_position.shape)
+
+        np.savez_compressed(filename,
+                            actions=actions,
+                            observations=observations,
+                            c=c,
+                            c_next=c_next,
+                            agent_position=agent_position,
+        )
+        print(f"Data saved to {filename}")
 

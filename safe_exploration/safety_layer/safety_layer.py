@@ -23,7 +23,7 @@ class SafetyLayer:
         if self._num_constraints != len(constraint_model_files):
             constraint_model_files = [None]*self._num_constraints
 
-        self._features = ["lidar_readings"]
+        self._features = ["lidar_readings", "agent_velocity", "agent_position"]
 
         self._initialize_constraint_models(constraint_model_files)
 
@@ -89,18 +89,9 @@ class SafetyLayer:
         episode_length = 0
         observation = self._env.reset()
         self.collisions = 0
+        self.constraint_violations = 0
 
         for step in range(num_steps):
-            # Forward speed bias
-            # bias_speed = (np.random.random() * 0.2) + 0.8
-            # Random turning bias
-            # turn_bias = (np.random.random() * 0.12) - 0.06
-
-            # base = 0.22 * bias_speed
-            # left_vel  = np.clip(base - turn_bias, -0.22, 0.22)
-            # right_vel = np.clip(base + turn_bias, -0.22, 0.22)
-            # action = np.array([left_vel, right_vel])
-
             action = self._env.action_space.sample()
             c = self._env.get_constraint_values()
             observation_next, _, done, _ = self._env.step(action, self._render)
@@ -135,6 +126,9 @@ class SafetyLayer:
 
             if collided:
                 self.collisions += 1
+
+            if np.any(c > 0):
+                self.constraint_violations += 1
             
             if done or (episode_length == self._config.max_episode_length):
                 observation = self._env.reset()
@@ -186,7 +180,8 @@ class SafetyLayer:
         self._train_mode()
 
         print(f"Validation completed, average loss {losses}\n"
-              f"Number of collisions: {self.collisions}")
+              f"Number of collisions: {self.collisions}\n"
+              f"Number of constraint violations: {self.constraint_violations}\n")
 
     def get_safe_action_with_details(self, observation, action, c):    
         # Find the values of G
@@ -253,17 +248,19 @@ class SafetyLayer:
             for_each(lambda x: self._writer.add_scalar(f"constraint {x[0]} training loss", x[1], self._train_global_step),
                      enumerate(losses))
 
-            (seq(self._models)
-                    .zip_with_index() # (model, index) 
-                    .map(lambda x: (f"constraint_model_{x[1]}", x[0])) # (model_name, model)
-                    .flat_map(lambda x: [(x[0], y) for y in x[1].named_parameters()]) # (model_name, (param_name, param_data))
-                    .map(lambda x: (f"{x[0]}_{x[1][0]}", x[1][1])) # (modified_param_name, param_data)
-                    .for_each(lambda x: self._writer.add_histogram(x[0], x[1].data.numpy(), self._train_global_step)))
+            if self._config.use_histogram:
+                (seq(self._models)
+                        .zip_with_index() # (model, index) 
+                        .map(lambda x: (f"constraint_model_{x[1]}", x[0])) # (model_name, model)
+                        .flat_map(lambda x: [(x[0], y) for y in x[1].named_parameters()]) # (model_name, (param_name, param_data))
+                        .map(lambda x: (f"{x[0]}_{x[1][0]}", x[1][1])) # (modified_param_name, param_data)
+                        .for_each(lambda x: self._writer.add_histogram(x[0], x[1].data.numpy(), self._train_global_step)))
 
             self._train_global_step += 1
 
             print(f"Finished epoch {epoch} with losses: {losses}.\n"
                   f"Number of collisions: {self.collisions}\n"
+                  f"Number of constraint violations: {self.constraint_violations}\n"
                   f"Running validation ...")
             self.evaluate()
             print("----------------------------------------------------------")
@@ -285,7 +282,7 @@ class SafetyLayer:
         if self._config.save_data:
             self.save_replay_buffer()
 
-    def save_replay_buffer(self, filename="data/replay_buffer.npz"):
+    def save_replay_buffer(self, filename="data/safety_layer/replay_buffer.npz"):
         actions = np.array(self.save_data["action"])
         observations = np.array(self.save_data["observation"])
         c = np.array(self.save_data["c"])

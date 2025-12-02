@@ -48,14 +48,13 @@ class Trainer:
             env = ObstacleAvoid()
 
         constraint_model_files = glob.glob(self._config.constraint_model_files)
-        print(f"Loading constraint model files: {constraint_model_files}")
-
         if self._config.use_safety_layer:
+            print(f"Loading constraint model files: {constraint_model_files}")
             safety_layer = SafetyLayer(env, constraint_model_files, render=self._config.render_training)
             
             if self._config.train_safety_layer:
                 safety_layer.train(self._config.output_folder)
-            if self._config.test:
+            if self._config.test_safety_layer:
                 safety_layer.evaluate()
         else:
             safety_layer = None

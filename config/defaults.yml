@@ -31,7 +31,7 @@ arguments:
           - name: "target_margin"
             default: 0.2
           - name: "agent_slack"
-            default: 0.25
+            default: 0.2
           - name: "episode_length"
             default: 30
           - name: "action_ratio"
@@ -45,9 +45,9 @@ arguments:
           - name: "reward_shaping_slack"
             default: 0.1
           - name: "action_scale"
-            default: 0.05
+            default: 0.22
           - name: "num_lidar_buckets"
-            default: 9
+            default: 60
           - name: "device"
             default: "cpu"
           - name: "headless"
@@ -60,10 +60,12 @@ arguments:
             default: 3
           - name: "obstacle_size"
             default: 0.5
-          - name: "enable_cameras" # sensors don't get updated if this is off
+          - name: "enable_cameras" # sensors don't get updated in headless mode if this is off
             default: true
           - name: "constraint_max_clip"
-            default: 1.0
+            default: 2.0
+          - name: "constraint_scale"
+            default: 5.0
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -71,21 +73,21 @@ arguments:
       help: "Actor network parameters."
       properties:
         - name: "layers"
-          default: [32, 16, 16]
+          default: [64, 32, 32, 16, 16, 8]
         - name: "init_bound"
           default: 0.003
     - name: "critic"
       help: "Critic network parameters."
       properties:
         - name: "layers"
-          default: [32, 16, 16]
+          default: [64, 32, 32, 16, 16, 8]
         - name: "init_bound"
           default: 0.003
     - name: "trainer"
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 150
+          default: 300
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
@@ -116,6 +118,10 @@ arguments:
           default: 20
         - name: "min_buffer_fill"
           default: 2000
+        - name: "save_data"
+          default: false
+        - name: "use_histogram"
+          default: false
   - name: "safety_layer"
     help: "Safety layer configuration."
     properties:
@@ -123,7 +129,7 @@ arguments:
         help: "Hyperparameters for constraint model (g)"
         properties:
           - name: "layers"
-            default: [10, 10]
+            default: [64, 32, 32, 16, 16, 8]
           - name: "init_bound"
             default: 0.003
       - name: "trainer"
@@ -132,21 +138,23 @@ arguments:
           - name: "batch_size"
             default: 256
           - name: "lr"
-            default: 0.001
+            default: 0.0001
           - name: "max_episode_length"
-            default: 100
-          - name: "steps_per_epoch"
-            default: 2000
-          - name: "epochs"
-            default: 15
-          - name: "evaluation_steps"
             default: 300
+          - name: "steps_per_epoch"
+            default: 12000
+          - name: "epochs"
+            default: 100
+          - name: "evaluation_steps"
+            default: 1200
           - name: "replay_buffer_size"
             default: 1000000
           - name: "use_gpu"
             default: false
           - name: "save_data"
-            default: true
+            default: false
+          - name: "use_histogram"
+            default: false
   - name: "main"
     help: "Safe-Explorer driver properties."
     properties:
@@ -173,6 +181,8 @@ arguments:
             default: false
           - name: "train_safety_layer"
             default: true
+          - name: "test_safety_layer"
+            default: false
           - name: "render_training"
             default: true
           - name: "render_evaluation"
