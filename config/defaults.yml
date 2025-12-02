@@ -4,52 +4,6 @@ arguments:
   - name: "env"
     help: "Configuration related to simulation environments."
     properties:
-      - name: "spaceship"
-        help: "Spaceship environment configuration."
-        properties:
-          - name: "length"
-            default: 2.5
-          - name: "margin"
-            default: 0.2
-          - name: "agent_slack"
-            default: 0.05
-          - name: "frequency_ratio"
-            default: 0.1
-          - name: "target_noise_std"
-            default: 0.05
-          - name: "target_radius"
-            default: 0.05
-          - name: "corridor_episode_length"
-            default: 15
-          - name: "arena_episode_length"
-            default: 45
-          - name: "enable_reward_shaping"
-            default: false
-          - name: "is_arena"
-            default: true
-          - name: "reward_shaping_slack"
-            default: 0.1
-      - name: "ballnd"
-        help: "Ball-ND environment configuration."
-        properties:
-          - name: "n"
-            default: 2
-          - name: "target_margin"
-            default: 0.2
-          - name: "agent_slack"
-            default: 0.05
-          - name: "episode_length"
-            default: 30
-          - name: "frequency_ratio"
-            default: 0.1
-          - name: "respawn_interval"
-            default: 4
-          - name: "target_noise_std"
-            default: 0.05
-          - name: "enable_reward_shaping"
-            default: false
-          - name: "reward_shaping_slack"
-            default: 0.1
       - name: "obstacleavoid"
         help: "Avoiding obstacles while getting to a goal."
         properties:
@@ -69,6 +23,49 @@ arguments:
             default: false
           - name: "reward_shaping_slack"
             default: 0.1
+          - name: "action_scale"
+            default: 0.3
+      - name: "obstacleavoidisaaclab"
+        help: "Avoiding obstacles while getting to a goal in isaaclab."
+        properties:
+          - name: "target_margin"
+            default: 0.2
+          - name: "agent_slack"
+            default: 0.2
+          - name: "episode_length"
+            default: 30
+          - name: "action_ratio"
+            default: 6
+          - name: "respawn_interval"
+            default: 10
+          - name: "target_noise_std"
+            default: 0.05
+          - name: "enable_reward_shaping"
+            default: false
+          - name: "reward_shaping_slack"
+            default: 0.1
+          - name: "action_scale"
+            default: 0.22
+          - name: "num_lidar_buckets"
+            default: 60
+          - name: "device"
+            default: "cpu"
+          - name: "headless"
+            default: true
+          - name: "num_envs"
+            default: 1
+          - name: "arena_size"
+            default: 6
+          - name: "num_obstacles"
+            default: 3
+          - name: "obstacle_size"
+            default: 0.5
+          - name: "enable_cameras" # sensors don't get updated in headless mode if this is off
+            default: true
+          - name: "constraint_max_clip"
+            default: 2.0
+          - name: "constraint_scale"
+            default: 5.0
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -76,21 +73,21 @@ arguments:
       help: "Actor network parameters."
       properties:
         - name: "layers"
-          default: [32, 16]
+          default: [64, 32, 32, 16, 16, 8]
         - name: "init_bound"
           default: 0.003
     - name: "critic"
       help: "Critic network parameters."
       properties:
         - name: "layers"
-          default: [32, 16]
+          default: [64, 32, 32, 16, 16, 8]
         - name: "init_bound"
           default: 0.003
     - name: "trainer"
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 100
+          default: 300
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
@@ -110,17 +107,21 @@ arguments:
         - name: "critic_lr"
           default: 0.001
         - name: "start_steps"
-          default: 500
+          default: 1000
         - name: "action_noise_range"
-          default: 0.01
+          default: 0.1
         - name: "use_gpu"
           default: false
         - name: "reward_scale"
           default: 1
         - name: "max_updates_per_episode"
-          default: 10
+          default: 20
         - name: "min_buffer_fill"
           default: 2000
+        - name: "save_data"
+          default: false
+        - name: "use_histogram"
+          default: false
   - name: "safety_layer"
     help: "Safety layer configuration."
     properties:
@@ -128,7 +129,7 @@ arguments:
         help: "Hyperparameters for constraint model (g)"
         properties:
           - name: "layers"
-            default: [10, 10]
+            default: [64, 32, 32, 16, 16, 8]
           - name: "init_bound"
             default: 0.003
       - name: "trainer"
@@ -137,18 +138,22 @@ arguments:
           - name: "batch_size"
             default: 256
           - name: "lr"
-            default: 0.001
+            default: 0.0001
           - name: "max_episode_length"
-            default: 600
+            default: 300
           - name: "steps_per_epoch"
-            default: 6000
+            default: 12000
           - name: "epochs"
-            default: 50
+            default: 100
           - name: "evaluation_steps"
-            default: 1500
+            default: 1200
           - name: "replay_buffer_size"
             default: 1000000
           - name: "use_gpu"
+            default: false
+          - name: "save_data"
+            default: false
+          - name: "use_histogram"
             default: false
   - name: "main"
     help: "Safe-Explorer driver properties."
@@ -159,7 +164,7 @@ arguments:
           - name: "seed"
             default: 0
           - name: "task"
-            default: "obstacleavoid"
+            default: "obstacleavoidisaaclab"
           - name: "use_safety_layer"
             default: true
           - name: "output_folder"
@@ -172,4 +177,14 @@ arguments:
             default: "./output/constraint_*.pt"
           - name: "test"
             default: false
+          - name: "safety_layer_only"
+            default: false
+          - name: "train_safety_layer"
+            default: true
+          - name: "test_safety_layer"
+            default: false
+          - name: "render_training"
+            default: true
+          - name: "render_evaluation"
+            default: true
 

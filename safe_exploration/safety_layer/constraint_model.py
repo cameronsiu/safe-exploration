@@ -16,7 +16,7 @@ class ConstraintModel(Net):
                       config.init_bound,
                       uniform_,
                       None)
-        
+
         if model_file is not None:
             state_dict = torch.load(model_file)
             self.load_state_dict(state_dict)
