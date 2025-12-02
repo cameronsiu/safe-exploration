@@ -80,7 +80,7 @@ class ObstacleAvoidIsaacLab(gym.Env):
             neg_distance_change = initial_distance - final_distance
 
             max_distance = self.action_ratio * self.sim_dt * self._action_scale
-            reward = (np.max(0, neg_distance_change) / max_distance) - 0.5
+            reward = (max(0, neg_distance_change) / max_distance) - 0.5
             return reward
 
     def _normalize_lidar_positions(self) -> np.ndarray:
