@@ -31,7 +31,7 @@ arguments:
           - name: "target_margin"
             default: 0.2
           - name: "agent_slack"
-            default: 0.05
+            default: 0.25
           - name: "episode_length"
             default: 30
           - name: "action_ratio"
@@ -45,9 +45,25 @@ arguments:
           - name: "reward_shaping_slack"
             default: 0.1
           - name: "action_scale"
-            default: 6.0
+            default: 0.05
           - name: "num_lidar_buckets"
             default: 9
+          - name: "device"
+            default: "cpu"
+          - name: "headless"
+            default: true
+          - name: "num_envs"
+            default: 1
+          - name: "arena_size"
+            default: 6
+          - name: "num_obstacles"
+            default: 3
+          - name: "obstacle_size"
+            default: 0.5
+          - name: "enable_cameras" # sensors don't get updated if this is off
+            default: true
+          - name: "constraint_max_clip"
+            default: 1.0
   - name: "ddpg"
     help: "Hyperparameters for DDPG algorithm."
     properties:
@@ -69,7 +85,7 @@ arguments:
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 50
+          default: 150
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
@@ -118,17 +134,19 @@ arguments:
           - name: "lr"
             default: 0.001
           - name: "max_episode_length"
-            default: 600
+            default: 100
           - name: "steps_per_epoch"
-            default: 6000
+            default: 2000
           - name: "epochs"
-            default: 10
+            default: 15
           - name: "evaluation_steps"
-            default: 1500
+            default: 300
           - name: "replay_buffer_size"
             default: 1000000
           - name: "use_gpu"
             default: false
+          - name: "save_data"
+            default: true
   - name: "main"
     help: "Safe-Explorer driver properties."
     properties:
@@ -140,7 +158,7 @@ arguments:
           - name: "task"
             default: "obstacleavoidisaaclab"
           - name: "use_safety_layer"
-            default: false
+            default: true
           - name: "output_folder"
             default: "./output"
           - name: "actor_model_file"
@@ -154,15 +172,9 @@ arguments:
           - name: "safety_layer_only"
             default: false
           - name: "train_safety_layer"
-            default: false
+            default: true
           - name: "render_training"
-            default: false
+            default: true
           - name: "render_evaluation"
-            default: false
-          - name: "device"
-            default: "cpu"
-          - name: "num_envs"
-            default: 1
-          - name: "headless"
             default: true
 
