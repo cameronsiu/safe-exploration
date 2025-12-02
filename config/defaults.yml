@@ -119,7 +119,9 @@ arguments:
         - name: "min_buffer_fill"
           default: 2000
         - name: "save_data"
-          default: true
+          default: false
+        - name: "use_histogram"
+          default: false
   - name: "safety_layer"
     help: "Safety layer configuration."
     properties:
@@ -150,7 +152,9 @@ arguments:
           - name: "use_gpu"
             default: false
           - name: "save_data"
-            default: true
+            default: false
+          - name: "use_histogram"
+            default: false
   - name: "main"
     help: "Safe-Explorer driver properties."
     properties:
@@ -174,7 +178,7 @@ arguments:
           - name: "test"
             default: false
           - name: "safety_layer_only"
-            default: false 
+            default: false
           - name: "train_safety_layer"
             default: true
           - name: "test_safety_layer"

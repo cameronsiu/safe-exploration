@@ -79,7 +79,9 @@ class ObstacleAvoidIsaacLab(gym.Env):
             final_distance = np.linalg.norm(final_position - self._target_position)
             neg_distance_change = initial_distance - final_distance
 
-            return neg_distance_change * 10
+            max_distance = self.action_ratio * self.sim_dt * self._action_scale
+            reward = (np.max(0, neg_distance_change) / max_distance) - 0.5
+            return reward
 
     def _normalize_lidar_positions(self) -> np.ndarray:
         turtlebot: Articulation = self.scene["Turtlebot"]
@@ -95,7 +97,6 @@ class ObstacleAvoidIsaacLab(gym.Env):
 
     def _get_lidar_readings(self) -> np.ndarray:
         # if self._lidar_readings is not None and self._current_time == self._lidar_measure_time:
-        #     print(f"Getting same lidar readings!")
         #     return self._lidar_readings
         if self._did_agent_collide():
             self._lidar_readings = np.zeros((self._num_lidar_buckets,))

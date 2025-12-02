@@ -248,12 +248,13 @@ class SafetyLayer:
             for_each(lambda x: self._writer.add_scalar(f"constraint {x[0]} training loss", x[1], self._train_global_step),
                      enumerate(losses))
 
-            (seq(self._models)
-                    .zip_with_index() # (model, index) 
-                    .map(lambda x: (f"constraint_model_{x[1]}", x[0])) # (model_name, model)
-                    .flat_map(lambda x: [(x[0], y) for y in x[1].named_parameters()]) # (model_name, (param_name, param_data))
-                    .map(lambda x: (f"{x[0]}_{x[1][0]}", x[1][1])) # (modified_param_name, param_data)
-                    .for_each(lambda x: self._writer.add_histogram(x[0], x[1].data.numpy(), self._train_global_step)))
+            if self._config.use_histogram:
+                (seq(self._models)
+                        .zip_with_index() # (model, index) 
+                        .map(lambda x: (f"constraint_model_{x[1]}", x[0])) # (model_name, model)
+                        .flat_map(lambda x: [(x[0], y) for y in x[1].named_parameters()]) # (model_name, (param_name, param_data))
+                        .map(lambda x: (f"{x[0]}_{x[1][0]}", x[1][1])) # (modified_param_name, param_data)
+                        .for_each(lambda x: self._writer.add_histogram(x[0], x[1].data.numpy(), self._train_global_step)))
 
             self._train_global_step += 1
 

@@ -197,10 +197,11 @@ class DDPG:
         self._writer.add_scalar("mean abs q predicted", torch.mean(torch.abs(q_predicted)).item(), self._train_global_step)
         self._writer.add_scalar("critic loss", critic_loss.item(), self._train_global_step)
         self._writer.add_scalar("actor loss", actor_loss.item(), self._train_global_step)
-        (seq(self._models.items())
-                    .flat_map(lambda x: [(x[0], y) for y in x[1].named_parameters()]) # (model_name, (param_name, param_data))
-                    .map(lambda x: (f"{x[0]}_{x[1][0]}", x[1][1]))
-                    .for_each(lambda x: self._writer.add_histogram(x[0], x[1].data.numpy(), self._train_global_step)))
+        if self._config.use_histogram:
+            (seq(self._models.items())
+                        .flat_map(lambda x: [(x[0], y) for y in x[1].named_parameters()]) # (model_name, (param_name, param_data))
+                        .map(lambda x: (f"{x[0]}_{x[1][0]}", x[1][1]))
+                        .for_each(lambda x: self._writer.add_histogram(x[0], x[1].data.numpy(), self._train_global_step)))
         self._train_global_step += 1
         self._logging_time += time.time() - start_time
 
