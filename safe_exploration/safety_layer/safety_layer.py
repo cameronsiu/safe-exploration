@@ -23,7 +23,11 @@ class SafetyLayer:
         if self._num_constraints != len(constraint_model_files):
             constraint_model_files = [None]*self._num_constraints
 
-        self._features = ["lidar_readings", "agent_velocity", "agent_position"]
+        self._features = [
+            "lidar_readings",
+            #"agent_velocity",
+            #"agent_position"
+        ]
 
         self._initialize_constraint_models(constraint_model_files)
 
@@ -183,7 +187,7 @@ class SafetyLayer:
               f"Number of collisions: {self.collisions}\n"
               f"Number of constraint violations: {self.constraint_violations}\n")
 
-    def get_safe_action_with_details(self, observation, action, c):    
+    def get_safe_action_with_details(self, observation, action, c):
         # Find the values of G
         self._eval_mode()
         o = self._as_tensor(self._flatten_dict({

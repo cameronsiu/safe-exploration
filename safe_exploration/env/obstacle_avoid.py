@@ -158,7 +158,7 @@ class ObstacleAvoid(gym.Env):
         self._lidar_measure_time = -1.0
         self._lidar_readings = None
 
-        return self.step(np.zeros(2))[0]
+        return self.step(np.zeros(2), False)[0]
     
     def _reset_obstacle_positions(self):
         num_obstacles = 20
@@ -195,16 +195,26 @@ class ObstacleAvoid(gym.Env):
         else:
             self._target_position = np.array([0.1, 0.8]) + target_position * np.array([0.8, -0.15])
     
-    def _get_reward(self, initial_position, final_position, action):
+    def _get_reward(self, initial_position, final_position, action, lidar_readings, collided):
         if self._config.enable_reward_shaping and self._is_agent_outside_shaping_boundary():
-            return -1
+            return -1, -1
         else:
             # Square each distance so being closer is more valuable
             sq_initial_distance = (1 - LA.norm(initial_position - self._target_position)) ** 2
             sq_final_distance = (1 - LA.norm(final_position - self._target_position)) ** 2
             distance_change = sq_final_distance - sq_initial_distance
 
-            return distance_change
+            lidar_signal = np.min(lidar_readings) * 0.05
+
+            if collided:
+                collision_signal = -1
+            else:
+                collision_signal = 0
+
+            #reward = distance_change + lidar_signal + collision_signal
+            reward = distance_change
+
+            return reward, distance_change
     
     def _move_agent(self, velocity):
         # Assume that frequency of motor is 1 (one action per second)
@@ -266,7 +276,7 @@ class ObstacleAvoid(gym.Env):
             if (new_y > 0.85 and obstacle_direction > 0) or (new_y < 0.15 and obstacle_direction < 0):
                 self._moving_obstacle_directions[obstacle_idx] = -1 * obstacle_direction
 
-    def step(self, action):
+    def step(self, action, render):
         # Check if the target needs to be relocated
         # Extract the first digit after decimal in current_time to add numerical stability
         if (int(100 * self._current_time) // 10) % (self._config.respawn_interval * 10) == 0:
@@ -279,9 +289,6 @@ class ObstacleAvoid(gym.Env):
         # Calculate new position of the agent
         self._move_agent(action)
         self._move_obstacles()
-
-        # Find reward
-        reward = self._get_reward(initial_position, self._agent_position, action)
 
         lidar_readings = self._get_lidar_readings()
         # nearest_lidar = np.argmin(lidar_readings)
@@ -296,10 +303,14 @@ class ObstacleAvoid(gym.Env):
             "lidar_readings": lidar_readings
         }
 
-        done = self._did_agent_collide() \
+        collided = self._did_agent_collide()
+        done = collided \
                or int(self._current_time // 1) > self._config.episode_length
 
-        return observation, reward, done, {}
+        # Find reward
+        reward, old_reward = self._get_reward(initial_position, self._agent_position, action, lidar_readings, collided)
+
+        return observation, reward, done, { "old_reward": old_reward }
     
     def render_env(self):
         if self.window is None:

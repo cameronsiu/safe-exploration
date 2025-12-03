@@ -212,6 +212,7 @@ class DDPG:
 
     def evaluate(self, render):
         episode_rewards = []
+        episode_old_rewards = []
         episode_lengths = []
         episode_actions = []
         episode_wheel_velocities = []
@@ -219,6 +220,7 @@ class DDPG:
         observation = self._env.reset()
         c = self._env.get_constraint_values()
         episode_reward = 0
+        episode_old_reward = 0
         episode_length = 0
         episode_action = 0
         episode_wheel_velocity = 0
@@ -229,6 +231,7 @@ class DDPG:
             action = self._get_action(observation, c, is_training=False)
             episode_action += np.absolute(action)
             observation, reward, done, details = self._env.step(action, render)
+            old_reward = details["old_reward"]
             if "wheel_velocity" in details:
                 episode_wheel_velocity += np.absolute(details["wheel_velocity"])
             
@@ -237,10 +240,12 @@ class DDPG:
 
             c = self._env.get_constraint_values()
             episode_reward += reward
+            episode_old_reward += old_reward
             episode_length += 1
             
             if done or (episode_length == self._config.max_episode_length):
                 episode_rewards.append(episode_reward)
+                episode_old_rewards.append(episode_old_reward)
                 episode_lengths.append(episode_length)
                 episode_actions.append(episode_action / episode_length)
                 episode_wheel_velocities.append(episode_wheel_velocity / episode_length)
@@ -248,13 +253,16 @@ class DDPG:
                 observation = self._env.reset()
                 c = self._env.get_constraint_values()
                 episode_reward = 0
+                episode_old_reward = 0
                 episode_length = 0
                 episode_action = 0
 
         mean_episode_reward = np.mean(episode_rewards)
+        mean_episode_old_reward = np.mean(episode_old_rewards)
         mean_episode_length = np.mean(episode_lengths)
 
         self._writer.add_scalar("eval mean episode reward", mean_episode_reward, self._eval_global_step)
+        self._writer.add_scalar("eval mean episode old reward", mean_episode_old_reward, self._eval_global_step)
         self._writer.add_scalar("eval mean episode length", mean_episode_length, self._eval_global_step)
         self._writer.add_scalar("eval mean action magnitude", np.mean(episode_actions), self._eval_global_step)
         self._writer.add_scalar("eval mean wheel velocity", np.mean(episode_wheel_velocities), self._eval_global_step)
@@ -281,6 +289,7 @@ class DDPG:
         observation = self._env.reset()
         c = self._env.get_constraint_values()
         episode_reward = 0
+        episode_old_reward = 0
         episode_length = 0
         step_trained_on = 0
         violations = 0
@@ -314,10 +323,12 @@ class DDPG:
             if render:
                 self._env.render_env()
 
-            observation_next, reward, done, _ = self._env.step(action, render)
+            observation_next, reward, done, details = self._env.step(action, render)
+            old_reward = details["old_reward"]
             self._sample_counter.record()
 
             episode_reward += reward
+            episode_old_reward += old_reward
             episode_length += 1
 
             self._replay_buffer.add({
@@ -361,6 +372,7 @@ class DDPG:
                 # Log metrics
                 self._writer.add_scalar("episode length", episode_length, self._train_global_step)
                 self._writer.add_scalar("episode reward", episode_reward, self._train_global_step)
+                self._writer.add_scalar("episode old reward", episode_old_reward, self._train_global_step)
                 self._writer.add_scalar("constraint violations", violations, self._train_global_step)
                 self._writer.add_scalar("collisions", collisions, self._train_global_step)
 
@@ -368,6 +380,7 @@ class DDPG:
                 observation = self._env.reset()
                 c = self._env.get_constraint_values()
                 episode_reward = 0
+                episode_old_reward = 0
                 episode_length = 0
 
             # Check if the epoch is over
@@ -375,7 +388,8 @@ class DDPG:
                 eval_start = time.time()
                 epoch_number = int(step / self._config.steps_per_epoch)
                 print(f"Finished epoch {epoch_number}. Running validation ...")
-                self.evaluate(self._render_evaluation)
+                render_eval = self._render_evaluation and epoch_number % 5 == 0
+                self.evaluate(render_eval)
                 eval_end = time.time()
                 time_eval += eval_end - eval_start
                 print(f"Recent Frame Rate: {self._sample_counter.frequency()}")

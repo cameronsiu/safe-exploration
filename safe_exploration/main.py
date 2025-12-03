@@ -11,6 +11,7 @@ from safe_exploration.env.obstacle_avoid_isaaclab import ObstacleAvoidIsaacLab
 from safe_exploration.ddpg.actor import Actor
 from safe_exploration.ddpg.critic import Critic
 from safe_exploration.ddpg.ddpg import DDPG
+from safe_exploration.safety_layer.projection_safety_layer import ProjectionSafetyLayer
 from safe_exploration.safety_layer.safety_layer import SafetyLayer
 
 
@@ -61,6 +62,9 @@ class Trainer:
 
         if self._config.safety_layer_only:
             return
+        
+        if self._config.use_manual_safety_layer:
+            safety_layer = ProjectionSafetyLayer(env._config)
 
         actor_file = Path(self._config.actor_model_file)
         critic_file = Path(self._config.critic_model_file)

@@ -73,21 +73,21 @@ arguments:
       help: "Actor network parameters."
       properties:
         - name: "layers"
-          default: [64, 32, 32, 16, 16, 8]
+          default: [32, 16]
         - name: "init_bound"
           default: 0.003
     - name: "critic"
       help: "Critic network parameters."
       properties:
         - name: "layers"
-          default: [64, 32, 32, 16, 16, 8]
+          default: [32, 16]
         - name: "init_bound"
           default: 0.003
     - name: "trainer"
       help: "Training parameters."
       properties:
         - name: "epochs"
-          default: 300
+          default: 600
         - name: "steps_per_epoch"
           default: 6000
         - name: "evaluation_steps"
@@ -107,15 +107,15 @@ arguments:
         - name: "critic_lr"
           default: 0.001
         - name: "start_steps"
-          default: 1000
+          default: 500
         - name: "action_noise_range"
-          default: 0.1
+          default: 0.01
         - name: "use_gpu"
           default: false
         - name: "reward_scale"
           default: 1
         - name: "max_updates_per_episode"
-          default: 20
+          default: 10
         - name: "min_buffer_fill"
           default: 2000
         - name: "save_data"
@@ -129,7 +129,7 @@ arguments:
         help: "Hyperparameters for constraint model (g)"
         properties:
           - name: "layers"
-            default: [64, 32, 32, 16, 16, 8]
+            default: [32, 16]
           - name: "init_bound"
             default: 0.003
       - name: "trainer"
@@ -138,13 +138,13 @@ arguments:
           - name: "batch_size"
             default: 256
           - name: "lr"
-            default: 0.0001
+            default: 0.001
           - name: "max_episode_length"
-            default: 300
+            default: 600
           - name: "steps_per_epoch"
-            default: 12000
+            default: 6000
           - name: "epochs"
-            default: 100
+            default: 60
           - name: "evaluation_steps"
             default: 1200
           - name: "replay_buffer_size"
@@ -164,8 +164,10 @@ arguments:
           - name: "seed"
             default: 0
           - name: "task"
-            default: "obstacleavoidisaaclab"
+            default: "obstacleavoid"
           - name: "use_safety_layer"
+            default: false
+          - name: "use_manual_safety_layer"
             default: true
           - name: "output_folder"
             default: "./output"
@@ -176,7 +178,7 @@ arguments:
           - name: "constraint_model_files"
             default: "./output/constraint_*.pt"
           - name: "test"
-            default: false
+            default: true
           - name: "safety_layer_only"
             default: false
           - name: "train_safety_layer"
@@ -184,7 +186,7 @@ arguments:
           - name: "test_safety_layer"
             default: false
           - name: "render_training"
-            default: true
+            default: false
           - name: "render_evaluation"
             default: true
 
