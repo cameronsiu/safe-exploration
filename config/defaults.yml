@@ -178,7 +178,7 @@ arguments:
           - name: "test"
             default: false
           - name: "safety_layer_only"
-            default: false
+            default: true
           - name: "train_safety_layer"
             default: true
           - name: "test_safety_layer"

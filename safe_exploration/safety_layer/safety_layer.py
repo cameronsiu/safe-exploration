@@ -23,7 +23,7 @@ class SafetyLayer:
         if self._num_constraints != len(constraint_model_files):
             constraint_model_files = [None]*self._num_constraints
 
-        self._features = ["lidar_readings", "agent_velocity", "agent_position"]
+        self._features = ["lidar_readings", "agent_velocity"]
 
         self._initialize_constraint_models(constraint_model_files)
 
@@ -77,7 +77,6 @@ class SafetyLayer:
         observation_dim = (seq(feature_dict.values())
                             .map(lambda x: x.shape[0])
                             .sum())
-        #observation_dim = 1
         self._models = [ConstraintModel(observation_dim,
                                         self._env.action_space.shape[0], model_file) \
                         for model_file in constraint_model_files]
@@ -235,6 +234,13 @@ class SafetyLayer:
         number_of_steps = self._config.steps_per_epoch * self._config.epochs
 
         for epoch in range(self._config.epochs):
+
+            # TODO: Add precomputed dataset
+            # if self._config.use_offline_dataset:
+            #     self.load_dataset(self._config.dataset_path)
+            # else:
+            #     self._sample_steps(self._config.steps_per_epoch)
+
             # Just sample episodes for the whole epoch
             self._sample_steps(self._config.steps_per_epoch)
 
@@ -242,6 +248,9 @@ class SafetyLayer:
             losses = np.mean(np.concatenate([self._update_batch(batch) for batch in \
                     self._replay_buffer.get_sequential(self._config.batch_size)]).reshape(-1, self._num_constraints), axis=0)
 
+            # TODO: remove for precomputed dataset
+            # if not self._config.use_offline_dataset:
+                # self._replay_buffer.clear()
             self._replay_buffer.clear()
 
             # Write losses and histograms to tensorboard
@@ -305,4 +314,32 @@ class SafetyLayer:
                             collided=collided
         )
         print(f"Data saved to {filename}")
+
+    def collect_dataset(self, steps: int, save_path: str):
+        """
+        Collect an offline dataset
+        
+        :param steps: Total number of steps
+        :type steps: int
+        :param save_path: Save file path
+        :type save_path: str
+        """
+        self._sample_steps(steps)
+        self.save_replay_buffer(filename=save_path)
+
+    def load_dataset(self, filename: str):
+        """
+        Load an offline dataset for training
+        
+        :param filename: Description
+        :type filename: str
+        """
+        data = np.load(filename)
+        for i in range(len(data["actions"])):
+            self._replay_buffer.add({
+                "action": data["actions"][i],
+                "observation": data["observations"][i],
+                "c": data["c"][i],
+                "c_next": data["c_next"][i]
+            })
 
